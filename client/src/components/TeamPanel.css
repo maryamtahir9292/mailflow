@@ -1,0 +1,270 @@
+.team-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.team-panel {
+  background: #fff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 780px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  overflow: hidden;
+}
+
+/* Header */
+.team-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  background: #0f3460;
+  color: white;
+}
+
+.team-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.team-header h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.team-count {
+  background: rgba(255,255,255,0.2);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+.team-close {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.7);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+.team-close:hover { color: white; }
+
+/* Invite info bar */
+.team-invite-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 24px;
+  background: #eff6ff;
+  border-bottom: 1px solid #dbeafe;
+  font-size: 13px;
+  color: #1d4ed8;
+  line-height: 1.5;
+}
+.team-invite-info svg { flex-shrink: 0; margin-top: 2px; }
+
+/* Body */
+.team-body {
+  overflow-y: auto;
+  padding: 20px 24px;
+  flex: 1;
+}
+
+.team-loading, .team-error {
+  text-align: center;
+  padding: 40px;
+  color: #64748b;
+  font-size: 14px;
+}
+.team-error { color: #ef4444; }
+
+/* Table */
+.team-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.team-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.team-table td {
+  padding: 12px 12px;
+  border-bottom: 1px solid #f8fafc;
+  vertical-align: middle;
+}
+
+.team-row--me td { background: #fafff5; }
+
+/* Member cell */
+.team-cell-member {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+}
+
+.team-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.team-avatar-placeholder {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #0f3460;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.team-member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.team-member-name {
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.team-you-badge {
+  font-size: 10px;
+  background: #0f3460;
+  color: white;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.team-member-email {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* Role */
+.team-role-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  display: inline-block;
+}
+
+.team-role-select {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1.5px solid;
+  background: white;
+  cursor: pointer;
+  outline: none;
+}
+.team-role-select:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Date cells */
+.team-cell-date {
+  color: #64748b;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+/* Remove button */
+.team-remove-btn {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1.5px solid #fca5a5;
+  color: #ef4444;
+  background: #fff5f5;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.team-remove-btn:hover { background: #fee2e2; border-color: #ef4444; }
+.team-remove-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Removed members */
+.team-removed-section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.team-removed-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+  margin-bottom: 10px;
+}
+
+.team-removed-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  opacity: 0.7;
+}
+
+.team-removed-name {
+  font-weight: 500;
+  font-size: 13px;
+  color: #475569;
+  min-width: 130px;
+}
+
+.team-removed-email {
+  font-size: 12px;
+  color: #94a3b8;
+  flex: 1;
+}
+
+.team-reactivate-btn {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1.5px solid #86efac;
+  color: #16a34a;
+  background: #f0fdf4;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.team-reactivate-btn:hover { background: #dcfce7; }

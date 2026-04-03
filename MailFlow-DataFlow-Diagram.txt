@@ -1,0 +1,451 @@
+
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                        MAILFLOW SYSTEM — COMPLETE DATA FLOW DIAGRAM                     │
+│                  Customer Email Support Management (Shopify · Netherlands)               │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+ EXTERNAL ENTITIES
+══════════════════════════════════════════════════════════════════════════════════════════════
+
+  ┌─────────────┐        ┌──────────────────┐       ┌───────────────────┐
+  │  CUSTOMER   │        │  GOOGLE CLOUD    │       │  SUPPORT STAFF    │
+  │  (Shopify)  │        │  (OAuth + Gmail) │       │  (Owner/Manager/  │
+  │             │        │                  │       │   Agent)          │
+  │ Sends email │        │ • OAuth 2.0      │       │                   │
+  │ in Dutch /  │        │ • Gmail API      │       │ • Reviews emails  │
+  │ English     │        │ • User Profile   │       │ • Sends replies   │
+  └──────┬──────┘        └────────┬─────────┘       │ • Manages team    │
+         │                        │                  └─────────┬─────────┘
+         │                        │                            │
+         ▼                        ▼                            ▼
+
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+ FRONTEND — React 19 + Vite 6 (localhost:5176)
+══════════════════════════════════════════════════════════════════════════════════════════════
+
+  ┌────────────────────────────────────────────────────────────────────────────────────┐
+  │                              REACT APPLICATION                                     │
+  │                                                                                    │
+  │  ┌──────────────┐    ┌─────────────────────────────────────────────────────────┐   │
+  │  │  main.jsx    │    │                    App.jsx                              │   │
+  │  │              │    │                                                         │   │
+  │  │ ErrorBoundary│    │  ┌──────────┐  Logged in?  ┌────────────────────────┐  │   │
+  │  │  wraps App   │───▶│  │ useAuth  │─────YES─────▶│     DASHBOARD          │  │   │
+  │  │              │    │  │  hook    │              │                        │  │   │
+  │  └──────────────┘    │  └────┬─────┘              │  ┌────────┐ ┌───────┐ │  │   │
+  │                      │       │ NO                  │  │Navbar  │ │Sidebar│ │  │   │
+  │                      │       ▼                     │  └────────┘ └───────┘ │  │   │
+  │                      │  ┌──────────┐              │  ┌─────────────────┐  │  │   │
+  │                      │  │  Login   │              │  │  EmailList      │  │  │   │
+  │                      │  │  Page    │              │  │  (infinite      │  │  │   │
+  │                      │  │          │              │  │   scroll)       │  │  │   │
+  │                      │  │ Google   │              │  └────────┬────────┘  │  │   │
+  │                      │  │ Sign-In  │              │           │           │  │   │
+  │                      │  │ Button   │              │           ▼           │  │   │
+  │                      │  └──────────┘              │  ┌─────────────────┐  │  │   │
+  │                      │                            │  │  EmailDetail    │  │  │   │
+  │                      │                            │  │  + AiReplyPanel │  │  │   │
+  │                      │                            │  └─────────────────┘  │  │   │
+  │                      │                            │                        │  │   │
+  │                      │                            │  ┌─────────────────┐  │  │   │
+  │                      │                            │  │  ComposeModal   │  │  │   │
+  │                      │                            │  │  TeamPanel      │  │  │   │
+  │                      │                            │  └─────────────────┘  │  │   │
+  │                      │                            └────────────────────────┘  │   │
+  │                      └─────────────────────────────────────────────────────────┘   │
+  │                                                                                    │
+  │  ┌─────────────────────────────────────────────────────────────────────────────┐   │
+  │  │  HOOKS (State Management)                                                   │   │
+  │  │                                                                             │   │
+  │  │  useAuth.js ─── login state, user profile, logout, switch account           │   │
+  │  │  useEmails.js ─ email list, filters, categories, done/callback/notes,       │   │
+  │  │                 AI categorize, pagination, search, save status to DB         │   │
+  │  └─────────────────────────────────────────────────────────────────────────────┘   │
+  │                                                                                    │
+  │  ┌─────────────────────────────────────────────────────────────────────────────┐   │
+  │  │  API CLIENT (client.js)                                                     │   │
+  │  │                                                                             │   │
+  │  │  apiFetch() ──▶ Adds CSRF token (x-csrf-token header)                      │   │
+  │  │             ──▶ Handles 401 (session expired → re-login)                    │   │
+  │  │             ──▶ Handles 403 (CSRF expired → auto-retry with new token)      │   │
+  │  │             ──▶ credentials: "include" (sends cookies)                      │   │
+  │  └─────────────────────────────────────────────────────────────────────────────┘   │
+  └───────────────────────────────────────┬────────────────────────────────────────────┘
+                                          │
+                      HTTP Requests (JSON) │  CORS enabled
+                      with CSRF token      │  credentials: include
+                                          ▼
+
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+ BACKEND — Node.js + Express 4 (localhost:3002)
+══════════════════════════════════════════════════════════════════════════════════════════════
+
+  ┌────────────────────────────────────────────────────────────────────────────────────┐
+  │                              EXPRESS SERVER (server.js)                             │
+  │                                                                                    │
+  │  ┌─────────────────────────────── MIDDLEWARE CHAIN ─────────────────────────────┐  │
+  │  │                                                                              │  │
+  │  │  cors() → cookieParser() → express-session (MongoStore) → doubleCsrf()      │  │
+  │  │                                                                              │  │
+  │  └──────────────────────────────────────────────────────────────────────────────┘  │
+  │                                                                                    │
+  │  ┌─────────────────────────────── SHARED MIDDLEWARE ────────────────────────────┐  │
+  │  │  lib/middleware.js                                                           │  │
+  │  │                                                                              │  │
+  │  │  requireTokens() ── checks req.session.tokens (Gmail OAuth tokens)          │  │
+  │  │  requireAuth() ──── checks req.session.user (logged in user)                │  │
+  │  │  requireManager() ─ checks role === 'owner' or 'manager'                    │  │
+  │  └──────────────────────────────────────────────────────────────────────────────┘  │
+  │                                                                                    │
+  │                                                                                    │
+  │  ┌──────────────────────────────── API ROUTES ─────────────────────────────────┐  │
+  │  │                                                                              │  │
+  │  │                                                                              │  │
+  │  │  ┌─────────────────────────────────────────────────────────────────────┐     │  │
+  │  │  │  AUTH ROUTES (routes/auth.js)                                       │     │  │
+  │  │  │                                                                     │     │  │
+  │  │  │  GET  /auth/status ──────▶ Check if session exists → return user    │     │  │
+  │  │  │  GET  /auth/google ──────▶ Redirect to Google OAuth consent         │     │  │
+  │  │  │  GET  /auth/callback ────▶ Exchange code → get tokens + profile     │     │  │
+  │  │  │                           → Find/Create User in MongoDB             │     │  │
+  │  │  │                           → Save tokens + user to session           │     │  │
+  │  │  │                           → Redirect to frontend                    │     │  │
+  │  │  │  GET  /auth/logout ──────▶ Destroy session → redirect              │     │  │
+  │  │  │  GET  /auth/switch ──────▶ Logout + re-auth with prompt:select     │     │  │
+  │  │  └─────────────────────────────────────────────────────────────────────┘     │  │
+  │  │                                                                              │  │
+  │  │                                                                              │  │
+  │  │  ┌─────────────────────────────────────────────────────────────────────┐     │  │
+  │  │  │  EMAIL ROUTES (routes/emails.js)           [requireTokens]          │     │  │
+  │  │  │                                                                     │     │  │
+  │  │  │  GET  /api/emails?pageToken=xxx                                     │     │  │
+  │  │  │       │                                                             │     │  │
+  │  │  │       ├──▶ Gmail API: list messages (max 50)                        │     │  │
+  │  │  │       ├──▶ Gmail API: get full message for each                     │     │  │
+  │  │  │       ├──▶ Extract body (lib/gmail.js: HTML → plain text)           │     │  │
+  │  │  │       ├──▶ Step 1: Keyword categorize (lib/categorize.js) [instant] │     │  │
+  │  │  │       └──▶ Return emails + nextPageToken                            │     │  │
+  │  │  │                                                                     │     │  │
+  │  │  │  POST /api/emails/categorize                                        │     │  │
+  │  │  │       │                                                             │     │  │
+  │  │  │       ├──▶ Step 2: AI categorize via Groq (Llama 3.1 8B)           │     │  │
+  │  │  │       ├──▶ Batch 50 emails per request (6000 TPM rate limit)        │     │  │
+  │  │  │       └──▶ Return { emailId: category } map                         │     │  │
+  │  │  └─────────────────────────────────────────────────────────────────────┘     │  │
+  │  │                                                                              │  │
+  │  │                                                                              │  │
+  │  │  ┌─────────────────────────────────────────────────────────────────────┐     │  │
+  │  │  │  REPLY ROUTES (routes/reply.js)            [requireTokens]          │     │  │
+  │  │  │                                                                     │     │  │
+  │  │  │  POST /api/reply/generate                                           │     │  │
+  │  │  │       │  Body: { emailBody, emailSubject, category, fromEmail }     │     │  │
+  │  │  │       │  Validated with express-validator                           │     │  │
+  │  │  │       └──▶ Groq AI generates English support reply                  │     │  │
+  │  │  │                                                                     │     │  │
+  │  │  │  POST /api/reply/translate                                          │     │  │
+  │  │  │       │  Body: { text }                                             │     │  │
+  │  │  │       └──▶ Groq AI detects language → translates to English         │     │  │
+  │  │  │                                                                     │     │  │
+  │  │  │  POST /api/reply/translate-outgoing                                 │     │  │
+  │  │  │       │  Body: { text, targetLanguage }                             │     │  │
+  │  │  │       └──▶ Groq AI translates English reply → customer language     │     │  │
+  │  │  │                                                                     │     │  │
+  │  │  │  POST /api/reply/verify-category                                    │     │  │
+  │  │  │       │  Body: { emailBody, currentCategory }                       │     │  │
+  │  │  │       └──▶ Groq AI suggests better category if needed               │     │  │
+  │  │  └─────────────────────────────────────────────────────────────────────┘     │  │
+  │  │                                                                              │  │
+  │  │                                                                              │  │
+  │  │  ┌─────────────────────────────────────────────────────────────────────┐     │  │
+  │  │  │  SEND ROUTES (routes/send.js)              [requireTokens]          │     │  │
+  │  │  │                                                                     │     │  │
+  │  │  │  POST /api/send                                                     │     │  │
+  │  │  │       │  Body: { to, subject, body, threadId, messageId }           │     │  │
+  │  │  │       │  Validated: to (email), body (1-50000 chars)                │     │  │
+  │  │  │       ├──▶ Build RFC 2822 email with threading headers              │     │  │
+  │  │  │       ├──▶ In-Reply-To + References (for thread continuity)         │     │  │
+  │  │  │       └──▶ Gmail API: messages.send()                               │     │  │
+  │  │  └─────────────────────────────────────────────────────────────────────┘     │  │
+  │  │                                                                              │  │
+  │  │                                                                              │  │
+  │  │  ┌─────────────────────────────────────────────────────────────────────┐     │  │
+  │  │  │  WORKSPACE ROUTES (routes/workspace.js)    [requireAuth]            │     │  │
+  │  │  │                                                                     │     │  │
+  │  │  │  GET    /api/workspace/members ─────▶ List team members             │     │  │
+  │  │  │  PUT    /api/workspace/members/:id/role ──▶ Change role             │     │  │
+  │  │  │                                      [requireManager]               │     │  │
+  │  │  │  DELETE /api/workspace/members/:id ──▶ Soft-remove member           │     │  │
+  │  │  │                                      [requireManager]               │     │  │
+  │  │  │  PUT    /api/workspace/members/:id/reactivate ──▶ Restore           │     │  │
+  │  │  │                                      [requireManager]               │     │  │
+  │  │  └─────────────────────────────────────────────────────────────────────┘     │  │
+  │  │                                                                              │  │
+  │  │                                                                              │  │
+  │  │  ┌─────────────────────────────────────────────────────────────────────┐     │  │
+  │  │  │  EMAIL STATUS ROUTES (routes/emailStatus.js) [requireAuth]          │     │  │
+  │  │  │                                                                     │     │  │
+  │  │  │  GET /api/email-status ──────▶ Return all saved statuses as map     │     │  │
+  │  │  │  PUT /api/email-status/:id ──▶ Upsert done/callback/notes/category  │     │  │
+  │  │  └─────────────────────────────────────────────────────────────────────┘     │  │
+  │  │                                                                              │  │
+  │  │                                                                              │  │
+  │  │  GET /api/csrf-token ───────────▶ Generate + return CSRF token              │  │
+  │  │                                                                              │  │
+  │  └──────────────────────────────────────────────────────────────────────────────┘  │
+  │                                                                                    │
+  │                                                                                    │
+  │  ┌──────────────────────────────── LIB (Helpers) ──────────────────────────────┐  │
+  │  │                                                                              │  │
+  │  │  oauth.js ─────── createOAuthClient(), createAuthenticatedClient(req),       │  │
+  │  │                   getAuthUrl() · Auto-refreshes expired tokens               │  │
+  │  │                                                                              │  │
+  │  │  gmail.js ─────── extractBody() · Parses Gmail API payload                   │  │
+  │  │                   HTML → plain text · Strips footers · Max 3000 chars        │  │
+  │  │                                                                              │  │
+  │  │  categorize.js ── keywordCategorize() · Intent-priority matching             │  │
+  │  │                   Categories: refund|replacement|returns|damage|delivery|     │  │
+  │  │                               general                                        │  │
+  │  │                                                                              │  │
+  │  │  groq.js ──────── callGroq() · Shared Groq API client                       │  │
+  │  │                   Model: llama-3.1-8b-instant · Rate: 6000 TPM              │  │
+  │  │                                                                              │  │
+  │  │  db.js ─────────── connectDB() · MongoDB connection with state tracking      │  │
+  │  │                                                                              │  │
+  │  │  middleware.js ─── requireTokens() · requireAuth() · requireManager()        │  │
+  │  │                                                                              │  │
+  │  └──────────────────────────────────────────────────────────────────────────────┘  │
+  └───────────┬──────────────────────────────────┬─────────────────────────────────────┘
+              │                                  │
+              ▼                                  ▼
+
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+ DATA STORES & EXTERNAL SERVICES
+══════════════════════════════════════════════════════════════════════════════════════════════
+
+  ┌──────────────────────────────────┐    ┌───────────────────────────────────────────┐
+  │        MONGODB (Atlas)           │    │           EXTERNAL APIs                   │
+  │                                  │    │                                           │
+  │  ┌────────────────────────────┐  │    │  ┌─────────────────────────────────────┐  │
+  │  │  D1: users                 │  │    │  │  Google OAuth 2.0                   │  │
+  │  │  ─────────────             │  │    │  │  • Login / consent flow             │  │
+  │  │  googleId, email, name,    │  │    │  │  • Token exchange                   │  │
+  │  │  picture, role (owner /    │  │    │  │  • Auto-refresh expired tokens      │  │
+  │  │  manager / agent),         │  │    │  │  • User profile info                │  │
+  │  │  workspaceId, preferences, │  │    │  └─────────────────────────────────────┘  │
+  │  │  isActive, lastLogin       │  │    │                                           │
+  │  └────────────────────────────┘  │    │  ┌─────────────────────────────────────┐  │
+  │                                  │    │  │  Gmail API (googleapis)             │  │
+  │  ┌────────────────────────────┐  │    │  │  • messages.list (fetch inbox)      │  │
+  │  │  D2: workspaces            │  │    │  │  • messages.get (full email)        │  │
+  │  │  ──────────────            │  │    │  │  • messages.send (send reply)       │  │
+  │  │  name, ownerId,            │  │    │  │  • Scopes: readonly, send,          │  │
+  │  │  members[{userId, joined}] │  │    │  │    userinfo.email, userinfo.profile │  │
+  │  │  settings (language, tz)   │  │    │  └─────────────────────────────────────┘  │
+  │  └────────────────────────────┘  │    │                                           │
+  │                                  │    │  ┌─────────────────────────────────────┐  │
+  │  ┌────────────────────────────┐  │    │  │  Groq AI (llama-3.1-8b-instant)    │  │
+  │  │  D3: emailstatuses         │  │    │  │                                     │  │
+  │  │  ─────────────────         │  │    │  │  Used for:                          │  │
+  │  │  emailId (unique),         │  │    │  │  • Email categorization (batch 50)  │  │
+  │  │  status (pending/done),    │  │    │  │  • Reply generation (English)       │  │
+  │  │  needsCallback (bool),     │  │    │  │  • Language detection               │  │
+  │  │  callbackNote (text),      │  │    │  │  • Translation (EN ↔ NL/other)     │  │
+  │  │  categoryOverride,         │  │    │  │  • Category verification            │  │
+  │  │  assignedTo                │  │    │  │                                     │  │
+  │  └────────────────────────────┘  │    │  │  Rate Limit: 6,000 tokens/min      │  │
+  │                                  │    │  └─────────────────────────────────────┘  │
+  │  ┌────────────────────────────┐  │    │                                           │
+  │  │  D4: sessions              │  │    │  NOTE: Emails are NOT stored in MongoDB.  │
+  │  │  ──────────                │  │    │  They stay in Gmail. Only workflow state   │
+  │  │  (connect-mongo)           │  │    │  (done/callback/notes) is persisted in    │
+  │  │  Session data survives     │  │    │  the emailstatuses collection.            │
+  │  │  server restarts           │  │    │                                           │
+  │  └────────────────────────────┘  │    └───────────────────────────────────────────┘
+  └──────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+ COMPLETE EMAIL WORKFLOW (Happy Path)
+══════════════════════════════════════════════════════════════════════════════════════════════
+
+  Customer sends email (Dutch)
+       │
+       ▼
+  Gmail Inbox ◄──── Gmail API fetches ◄──── MailFlow Backend
+       │
+       ▼
+  Extract email body (HTML → plain text, strip footers, max 3000 chars)
+       │
+       ├──▶ Keyword categorize (instant) ──▶ Show in UI immediately
+       │
+       └──▶ AI categorize (async, batched) ──▶ Update category in UI later
+       │
+       ▼
+  Support Agent selects email in list
+       │
+       ▼
+  Email Detail shows: subject, from, to, date, body, category badge
+       │
+       ├──▶ [Translate] ──▶ Groq AI detects language ──▶ Shows English translation
+       │
+       ├──▶ [Mark Done] ──▶ Saves to MongoDB (survives refresh)
+       │
+       ├──▶ [Flag Callback] ──▶ Add note ──▶ Saves to MongoDB
+       │
+       └──▶ [Generate AI Reply]
+              │
+              ▼
+         Groq AI creates English draft
+              │
+              ▼
+         Agent reviews & edits draft
+              │
+              ▼
+         Click "Translate & Send"
+              │
+              ├──▶ Detect customer language (AI)
+              └──▶ Translate reply to customer language (AI)
+              │
+              ▼
+         Preview translated reply (editable)
+              │
+              ▼
+         Click "Send"
+              │
+              ▼
+         POST /api/send ──▶ Gmail API sends email
+              │               (with In-Reply-To threading)
+              ▼
+         ✓ Customer receives reply in their language
+
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+ SECURITY LAYERS
+══════════════════════════════════════════════════════════════════════════════════════════════
+
+  Request from Browser
+       │
+       ▼
+  ┌─ CORS (only CLIENT_ORIGIN allowed) ─────────────────────────────────────────┐
+  │    │                                                                         │
+  │    ▼                                                                         │
+  │  Cookie Parser ──▶ Read session cookie + CSRF cookie                        │
+  │    │                                                                         │
+  │    ▼                                                                         │
+  │  Express Session ──▶ Load session from MongoDB (connect-mongo)              │
+  │    │                                                                         │
+  │    ▼                                                                         │
+  │  CSRF Check (POST/PUT/DELETE only)                                          │
+  │    │  Double-submit cookie pattern                                          │
+  │    │  Compares _csrf cookie vs x-csrf-token header                          │
+  │    │                                                                         │
+  │    ▼                                                                         │
+  │  Route Middleware                                                            │
+  │    │  requireTokens() ── has Gmail OAuth tokens?                            │
+  │    │  requireAuth() ──── has logged-in user?                                │
+  │    │  requireManager() ─ is owner or manager?                               │
+  │    │                                                                         │
+  │    ▼                                                                         │
+  │  Input Validation (express-validator)                                        │
+  │    │  Sanitize & validate request body                                      │
+  │    │                                                                         │
+  │    ▼                                                                         │
+  │  Route Handler ──▶ Process request                                          │
+  └──────────────────────────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+ ROLE-BASED ACCESS
+══════════════════════════════════════════════════════════════════════════════════════════════
+
+  ┌──────────────┬──────────────────────────────────────────────────────────────┐
+  │     ROLE     │  PERMISSIONS                                                │
+  ├──────────────┼──────────────────────────────────────────────────────────────┤
+  │   Owner      │  Everything: read emails, reply, translate, send,           │
+  │              │  manage team (change roles, remove, reactivate members)      │
+  ├──────────────┼──────────────────────────────────────────────────────────────┤
+  │   Manager    │  Same as Owner: full email access + team management          │
+  ├──────────────┼──────────────────────────────────────────────────────────────┤
+  │   Agent      │  Read emails, reply, translate, send, mark done/callback     │
+  │              │  CANNOT manage team members or change roles                  │
+  └──────────────┴──────────────────────────────────────────────────────────────┘
+
+  New member joins: Sign in with Google → auto-created as "Agent"
+                    → Owner/Manager promotes to "Manager" if needed
+
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+ FILE STRUCTURE
+══════════════════════════════════════════════════════════════════════════════════════════════
+
+  mailflow/
+  ├── server.js                  # Express server entry point
+  ├── .env                       # Secrets (SESSION_SECRET, GROQ_API_KEY, MONGODB_URI)
+  ├── credentials.json           # Google OAuth client credentials
+  ├── package.json               # Backend dependencies
+  │
+  ├── lib/
+  │   ├── oauth.js               # OAuth client + auto token refresh
+  │   ├── gmail.js               # Email body extraction (HTML → text)
+  │   ├── groq.js                # Shared Groq AI client
+  │   ├── categorize.js          # Keyword-based categorizer (fallback)
+  │   ├── middleware.js           # Auth middleware (requireTokens/Auth/Manager)
+  │   └── db.js                  # MongoDB connection
+  │
+  ├── models/
+  │   ├── User.js                # User schema (Google profile + role)
+  │   ├── Workspace.js           # Team/workspace schema
+  │   └── EmailStatus.js         # Workflow state (done/callback/notes)
+  │
+  ├── routes/
+  │   ├── auth.js                # Google OAuth login/logout/callback
+  │   ├── emails.js              # Fetch + categorize emails
+  │   ├── reply.js               # AI reply generation + translation
+  │   ├── send.js                # Send email via Gmail
+  │   ├── workspace.js           # Team management
+  │   └── emailStatus.js         # Workflow state persistence
+  │
+  └── client/                    # React 19 + Vite 6
+      ├── .env                   # VITE_API_URL=http://localhost:3002
+      ├── vite.config.js         # Dev server on port 5176
+      ├── index.html             # Entry HTML
+      │
+      └── src/
+          ├── main.jsx           # Root render + ErrorBoundary
+          ├── App.jsx            # Auth routing (Login vs Dashboard)
+          ├── index.css          # Global styles + CSS variables
+          │
+          ├── api/
+          │   └── client.js      # apiFetch() with CSRF + retry
+          │
+          ├── hooks/
+          │   ├── useAuth.js     # Auth state management
+          │   └── useEmails.js   # Email state + workflow + persistence
+          │
+          ├── lib/
+          │   └── categories.js  # Category definitions (id, label, icon, colors)
+          │
+          ├── pages/
+          │   ├── Login.jsx      # Animated login page
+          │   ├── Login.css
+          │   ├── Dashboard.jsx  # Main layout (Navbar + Sidebar + Content)
+          │   └── Dashboard.css
+          │
+          └── components/
+              ├── Navbar.jsx / .css         # Top navigation bar
+              ├── Sidebar.jsx / .css        # Category + workflow + date filters
+              ├── CategoryTab.jsx / .css    # Filter button with icon + count
+              ├── EmailList.jsx / .css      # Scrollable email list
+              ├── EmailRow.jsx / .css       # Single email preview row
+              ├── EmailDetail.jsx / .css    # Full email view + actions
+              ├── AiReplyPanel.jsx / .css   # AI draft + translate + send
+              ├── ComposeModal.jsx / .css   # New email composer
+              ├── TeamPanel.jsx / .css      # Team management modal
+              ├── EmptyState.jsx / .css     # Empty state messages
+              ├── ErrorBoundary.jsx         # React error catch
+              └── Spinner.jsx              # Loading indicator

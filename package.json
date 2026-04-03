@@ -1,0 +1,30 @@
+{
+  "name": "mailflow",
+  "version": "1.0.0",
+  "description": "Customer Email Support Management System",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "kill-port": "powershell -Command \"Get-Process -Id (Get-NetTCPConnection -LocalPort 3002,5176 -ErrorAction SilentlyContinue).OwningProcess -ErrorAction SilentlyContinue | Stop-Process -Force\"",
+    "dev": "npm run kill-port && nodemon server.js",
+    "dev:client": "npm run dev --prefix client",
+    "dev:all": "concurrently --kill-others-on-fail -n backend,client -c cyan,magenta \"npm run dev\" \"npm run dev --prefix client\""
+  },
+  "dependencies": {
+    "connect-mongo": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "csrf-csrf": "^4.0.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "express-validator": "^7.3.1",
+    "googleapis": "^140.0.1",
+    "mongoose": "^9.2.4"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "nodemon": "^3.1.4"
+  }
+}
