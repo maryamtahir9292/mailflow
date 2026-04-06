@@ -187,7 +187,13 @@ router.get('/', requireTokens, async (req, res) => {
     );
   } catch (err) {
     console.error('Emails error:', err.message);
-    if (err.status === 401 || err.code === 401) {
+    const isAuthError =
+      err.status === 401 || err.code === 401 ||
+      err.status === 400 || err.code === 400 ||
+      err.message?.includes('invalid_grant') ||
+      err.message?.includes('Token has been expired or revoked') ||
+      err.message?.includes('Invalid Credentials');
+    if (isAuthError) {
       req.session.tokens = null;
       return res.status(401).json({ error: 'Session expired — please sign in again' });
     }
@@ -270,7 +276,13 @@ router.get('/:id', requireTokens, async (req, res) => {
     res.json({ id: req.params.id, body });
   } catch (err) {
     console.error('Email body fetch error:', err.message);
-    if (err.status === 401 || err.code === 401) {
+    const isAuthError =
+      err.status === 401 || err.code === 401 ||
+      err.status === 400 || err.code === 400 ||
+      err.message?.includes('invalid_grant') ||
+      err.message?.includes('Token has been expired or revoked') ||
+      err.message?.includes('Invalid Credentials');
+    if (isAuthError) {
       return res.status(401).json({ error: 'Session expired — please sign in again' });
     }
     res.status(500).json({ error: 'Failed to fetch email body' });

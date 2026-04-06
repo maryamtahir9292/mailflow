@@ -19,11 +19,12 @@ import ticketRoutes       from './routes/tickets.js';
 dotenv.config();
 
 process.on('unhandledRejection', (reason) => {
-  console.error('❌ Unhandled rejection:', reason);
-  process.exit(1);
+  // Log but do NOT exit — Groq rate limits, DB blips, etc. should not kill the server
+  console.error('⚠️  Unhandled rejection (non-fatal):', reason);
 });
 
 process.on('uncaughtException', (err) => {
+  // Truly unexpected synchronous throws — exit is appropriate here
   console.error('❌ Uncaught exception:', err);
   process.exit(1);
 });
@@ -123,3 +124,4 @@ server.on('error', (err) => {
   }
   process.exit(1);
 });
+

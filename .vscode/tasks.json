@@ -9,7 +9,7 @@
         "cwd": "${workspaceFolder}",
         "shell": {
           "executable": "powershell.exe",
-          "args": ["-NoLogo", "-Command"]
+          "args": ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass"]
         }
       },
       "presentation": {
@@ -26,12 +26,12 @@
     {
       "label": "Frontend: Client",
       "type": "shell",
-      "command": "npm run dev --prefix client",
+      "command": "Start-Sleep -Seconds 4; npm run dev --prefix client",
       "options": {
         "cwd": "${workspaceFolder}",
         "shell": {
           "executable": "powershell.exe",
-          "args": ["-NoLogo", "-Command"]
+          "args": ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass"]
         }
       },
       "presentation": {

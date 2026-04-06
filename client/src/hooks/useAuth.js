@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../api/client.js';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3002';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export function useAuth() {
   const [state, setState] = useState({ loading: true, loggedIn: false, user: null });
@@ -9,9 +9,10 @@ export function useAuth() {
   const refetch = useCallback(async () => {
     try {
       const data = await apiFetch('/auth/status');
-      setState({ loading: false, loggedIn: data.loggedIn, user: data.user });
-    } catch {
-      setState({ loading: false, loggedIn: false, user: null });
+      setState({ loading: false, loggedIn: data.loggedIn, user: data.user, offline: false });
+    } catch (err) {
+      const offline = err.message === 'Failed to fetch' || err.message?.includes('NetworkError');
+      setState({ loading: false, loggedIn: false, user: null, offline });
     }
   }, []);
 

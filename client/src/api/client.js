@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3002';
+const BASE = import.meta.env.VITE_API_URL || '';
 
 // CSRF token — fetched once, reused for all state-changing requests
 let csrfToken = null;

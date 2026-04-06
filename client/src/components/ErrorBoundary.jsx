@@ -31,6 +31,15 @@ export default class ErrorBoundary extends Component {
           <p style={{ margin: 0, color: '#64748b', maxWidth: 400, textAlign: 'center' }}>
             MailFlow encountered an unexpected error. Try refreshing the page.
           </p>
+          {this.state.error && (
+            <pre style={{
+              margin: '8px 0 0', padding: '10px 14px', background: '#fef2f2',
+              border: '1px solid #fecaca', borderRadius: 6, fontSize: 12,
+              color: '#dc2626', maxWidth: 480, overflowX: 'auto', textAlign: 'left',
+            }}>
+              {this.state.error.message}
+            </pre>
+          )}
           <button
             onClick={() => window.location.reload()}
             style={{
