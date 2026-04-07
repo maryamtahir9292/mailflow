@@ -5,6 +5,7 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
+    "build": "npm install --prefix client && npm run build --prefix client",
     "start": "node server.js",
     "kill-port": "powershell -Command \"$ids = (Get-NetTCPConnection -LocalPort 3002,5176 -ErrorAction SilentlyContinue).OwningProcess; if ($ids) { Get-Process -Id $ids -ErrorAction SilentlyContinue | Stop-Process -Force }\"",
     "dev": "npm run kill-port && nodemon server.js",

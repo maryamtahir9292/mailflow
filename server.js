@@ -49,7 +49,7 @@ app.use(session({
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, httpOnly: true, maxAge: 24 * 60 * 60 * 1000 },
+  cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, sameSite: 'lax', maxAge: 24 * 60 * 60 * 1000 },
   store: (() => {
     if (!process.env.MONGODB_URI) return undefined;
     const store = MongoStore.create({ mongoUrl: process.env.MONGODB_URI, collectionName: 'sessions' });
@@ -63,7 +63,7 @@ const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => process.env.SESSION_SECRET,
   getSessionIdentifier: (req) => req.session?.id || '',
   cookieName: '_csrf',
-  cookieOptions: { httpOnly: true, sameSite: 'lax', secure: false },
+  cookieOptions: { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' },
   getTokenFromRequest: (req) => req.headers['x-csrf-token'],
 });
 
@@ -99,29 +99,27 @@ app.get('/api/profile', requireAuth, (req, res) => {
   res.json(req.session.user);
 });
 
-// ── Start ─────────────────────────────────────────────────────────────────────
-const server = app.listen(PORT, () => {
-  console.log(`\n✅  MailFlow server  →  http://localhost:${PORT}`);
-  console.log(`🔐  Login           →  http://localhost:${PORT}/auth/google`);
-  console.log(`📧  Emails API      →  http://localhost:${PORT}/api/emails`);
-  if (!process.env.GROQ_API_KEY) {
-    console.warn('\n⚠️   GROQ_API_KEY not set\n');
-  } else {
-    console.log('✨  Groq AI         →  enabled\n');
-  }
-  if (!process.env.MONGODB_URI) {
-    console.warn('⚠️   MONGODB_URI not set — no database\n');
-  }
-});
+// ── Local dev server (not used by Vercel serverless) ─────────────────────────
+if (process.env.NODE_ENV !== 'production') {
+  const server = app.listen(PORT, () => {
+    console.log(`\n✅  MailFlow server  →  http://localhost:${PORT}`);
+    console.log(`🔐  Login           →  http://localhost:${PORT}/auth/google`);
+    console.log(`📧  Emails API      →  http://localhost:${PORT}/api/emails`);
+    if (!process.env.GROQ_API_KEY) console.warn('\n⚠️   GROQ_API_KEY not set\n');
+    else console.log('✨  Groq AI         →  enabled\n');
+    if (!process.env.MONGODB_URI) console.warn('⚠️   MONGODB_URI not set — no database\n');
+  });
 
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`\n❌  Port ${PORT} is already in use.`);
-    console.error(`    Run this in PowerShell to free it, then try again:\n`);
-    console.error(`    Get-Process -Id (Get-NetTCPConnection -LocalPort ${PORT}).OwningProcess | Stop-Process -Force\n`);
-  } else {
-    console.error('Server error:', err.message);
-  }
-  process.exit(1);
-});
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n❌  Port ${PORT} is already in use.`);
+      console.error(`    Get-Process -Id (Get-NetTCPConnection -LocalPort ${PORT}).OwningProcess | Stop-Process -Force\n`);
+    } else {
+      console.error('Server error:', err.message);
+    }
+    process.exit(1);
+  });
+}
+
+export default app;
 
