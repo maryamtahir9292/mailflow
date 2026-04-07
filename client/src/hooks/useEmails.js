@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { apiFetch } from '../api/client.js';
 import { CATEGORIES } from '../lib/categories.js';
 export { CATEGORIES }; // re-export so Sidebar can still import from here
@@ -38,6 +38,7 @@ export function useEmails(loggedIn) {
   const [callbackNotes,  setCallbackNotes]  = useState(new Map());
   const [doneIds,        setDoneIds]        = useState(new Set());
   const [bodyLoading,    setBodyLoading]    = useState(false);
+  const callbackNoteTimer = useRef(null);
 
   // Derive selected email fresh from emails array — avoids stale ref issues
   const selectedEmail = useMemo(
@@ -204,8 +205,8 @@ export function useEmails(loggedIn) {
       return next;
     });
     // Debounce save — don't save on every keystroke
-    clearTimeout(setCallbackNote._timer);
-    setCallbackNote._timer = setTimeout(() => {
+    clearTimeout(callbackNoteTimer.current);
+    callbackNoteTimer.current = setTimeout(() => {
       saveStatus(id, { callbackNote: note.trim() });
     }, 800);
   }, []);

@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "kill-port": "powershell -Command \"Get-Process -Id (Get-NetTCPConnection -LocalPort 3002,5176 -ErrorAction SilentlyContinue).OwningProcess -ErrorAction SilentlyContinue | Stop-Process -Force\"",
+    "kill-port": "powershell -Command \"$ids = (Get-NetTCPConnection -LocalPort 3002,5176 -ErrorAction SilentlyContinue).OwningProcess; if ($ids) { Get-Process -Id $ids -ErrorAction SilentlyContinue | Stop-Process -Force }\"",
     "dev": "npm run kill-port && nodemon server.js",
     "dev:client": "npm run dev --prefix client",
     "dev:all": "concurrently --kill-others-on-fail -n backend,client -c cyan,magenta \"npm run dev\" \"npm run dev --prefix client\""
