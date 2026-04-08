@@ -21,6 +21,7 @@ function htmlRedirect(res, redirectUrl, sessionData) {
       maxAge: 24 * 60 * 60 * 1000,
       path: '/',
     });
+    console.log('[auth] cookie set, token length:', token.length, 'secure:', isProd, 'hasTokens:', !!sessionData.tokens, 'hasUser:', !!sessionData.user);
   }
   res.setHeader('Cache-Control', 'no-store, no-cache, private');
   const safeUrl = JSON.stringify(redirectUrl);
@@ -34,6 +35,9 @@ const router = express.Router();
 // GET /auth/status
 router.get('/status', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, private');
+  const hasCookie = !!req.cookies?.[SESSION_COOKIE];
+  const hasTokens = !!req.session?.tokens;
+  console.log('[status] cookie:', hasCookie, '| session.tokens:', hasTokens, '| loggedIn:', hasTokens);
   if (req.session?.tokens) {
     res.json({ loggedIn: true, user: req.session.user || null });
   } else {
