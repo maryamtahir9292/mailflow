@@ -1,14 +1,39 @@
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import { google } from 'googleapis';
 import { createOAuthClient, getAuthUrl } from '../lib/oauth.js';
 import { isDBConnected } from '../lib/db.js';
 import User from '../models/User.js';
 import Workspace from '../models/Workspace.js';
 
+const isProd = process.env.NODE_ENV === 'production';
+const SESSION_COOKIE = 'mf_session';
+
+// Send a 200 HTML page that sets the cookie and redirects via JS.
+// Vercel's edge strips Set-Cookie from 302 responses — a 200 body is reliable.
+function htmlRedirect(res, redirectUrl, sessionData) {
+  if (sessionData) {
+    const token = jwt.sign(sessionData, process.env.SESSION_SECRET, { expiresIn: '24h' });
+    res.cookie(SESSION_COOKIE, token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+  }
+  res.setHeader('Cache-Control', 'no-store, no-cache, private');
+  const safeUrl = JSON.stringify(redirectUrl);
+  res.send(`<!DOCTYPE html><html><head><meta charset="utf-8">
+<script>window.location.replace(${safeUrl});</script>
+</head><body>Redirecting...</body></html>`);
+}
+
 const router = express.Router();
 
 // GET /auth/status
 router.get('/status', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, private');
   if (req.session?.tokens) {
     res.json({ loggedIn: true, user: req.session.user || null });
   } else {
@@ -102,11 +127,14 @@ router.get('/callback', async (req, res) => {
     }
 
     req.session.user = userInfo;
-    res.redirect(`${process.env.CLIENT_ORIGIN}?auth=success`);
+    htmlRedirect(res, `${process.env.CLIENT_ORIGIN}?auth=success`, {
+      tokens: req.session.tokens,
+      user:   req.session.user,
+    });
 
   } catch (err) {
     console.error('OAuth callback error:', err.message);
-    res.redirect(`${process.env.CLIENT_ORIGIN}?error=auth_failed`);
+    htmlRedirect(res, `${process.env.CLIENT_ORIGIN}?error=auth_failed`, null);
   }
 });
 
