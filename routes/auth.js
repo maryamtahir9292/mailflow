@@ -9,6 +9,9 @@ const router = express.Router();
 
 // GET /auth/status
 router.get('/status', (req, res) => {
+  console.log('[status] cookies present:', !!req.headers.cookie);
+  console.log('[status] session keys:', Object.keys(req.session || {}));
+  console.log('[status] has tokens:', !!req.session?.tokens);
   if (req.session?.tokens) {
     res.json({ loggedIn: true, user: req.session.user || null });
   } else {
@@ -29,7 +32,10 @@ router.get('/callback', async (req, res) => {
   try {
     const oauth2Client = createOAuthClient();
     const { tokens } = await oauth2Client.getToken(code);
-    req.session.tokens = tokens;
+    // Strip id_token — it's a large JWT (~1.5KB) we don't need after auth,
+    // and storing it can push the session cookie over the 4KB browser limit.
+    const { id_token: _discarded, ...sessionTokens } = tokens;
+    req.session.tokens = sessionTokens;
 
     oauth2Client.setCredentials(tokens);
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
