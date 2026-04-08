@@ -1,7 +1,7 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
-import session from 'express-session';
-import MongoStore from 'connect-mongo';
+import cookieSession from 'cookie-session';
+import crypto from 'crypto';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { doubleCsrf } from 'csrf-csrf';
@@ -45,23 +45,24 @@ connectDB();
 app.use(cors({ origin: process.env.CLIENT_ORIGIN, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
-app.use(session({
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, sameSite: 'lax', maxAge: 24 * 60 * 60 * 1000 },
-  store: (() => {
-    if (!process.env.MONGODB_URI) return undefined;
-    const store = MongoStore.create({ mongoUrl: process.env.MONGODB_URI, collectionName: 'sessions' });
-    store.on('error', (err) => console.error('❌ Session store error:', err));
-    return store;
-  })(),
+app.use(cookieSession({
+  name: 'session',
+  keys: [process.env.SESSION_SECRET],
+  maxAge: 24 * 60 * 60 * 1000,
+  secure: process.env.NODE_ENV === 'production',
+  httpOnly: true,
+  sameSite: 'lax',
 }));
 
 // ── CSRF Protection ──────────────────────────────────────────────────────────
 const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => process.env.SESSION_SECRET,
-  getSessionIdentifier: (req) => req.session?.id || '',
+  getSessionIdentifier: (req) => {
+    if (!req.session.csrfSecret) {
+      req.session.csrfSecret = crypto.randomBytes(16).toString('hex');
+    }
+    return req.session.csrfSecret;
+  },
   cookieName: '_csrf',
   cookieOptions: { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' },
   getTokenFromRequest: (req) => req.headers['x-csrf-token'],
