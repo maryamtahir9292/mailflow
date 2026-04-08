@@ -1,7 +1,6 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
-import cookieSession from 'cookie-session';
-import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { doubleCsrf } from 'csrf-csrf';
@@ -19,18 +18,20 @@ import ticketRoutes       from './routes/tickets.js';
 dotenv.config();
 
 process.on('unhandledRejection', (reason) => {
-  // Log but do NOT exit — Groq rate limits, DB blips, etc. should not kill the server
   console.error('⚠️  Unhandled rejection (non-fatal):', reason);
 });
 
 process.on('uncaughtException', (err) => {
-  // Truly unexpected synchronous throws — exit is appropriate here
   console.error('❌ Uncaught exception:', err);
   process.exit(1);
 });
 
 const app  = express();
 const PORT = process.env.PORT || 3002;
+const isProd = process.env.NODE_ENV === 'production';
+
+const SESSION_COOKIE = 'mf_session';
+const SESSION_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
 
 // ── Startup checks ────────────────────────────────────────────────────────────
 if (!process.env.SESSION_SECRET) {
@@ -45,41 +46,71 @@ connectDB();
 app.use(cors({ origin: process.env.CLIENT_ORIGIN, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
-app.use(cookieSession({
-  name: 'session',
-  keys: [process.env.SESSION_SECRET],
-  maxAge: 24 * 60 * 60 * 1000,
-  secure: process.env.NODE_ENV === 'production',
-  httpOnly: true,
-  sameSite: 'lax',
-}));
 
-// ── CSRF Protection ──────────────────────────────────────────────────────────
+// ── JWT Session Middleware ────────────────────────────────────────────────────
+// Reads session from a signed JWT cookie. Intercepts res.json/res.redirect to
+// write the (possibly modified) session back as a cookie on every response.
+app.use((req, res, next) => {
+  // Read
+  const raw = req.cookies?.[SESSION_COOKIE];
+  req.session = {};
+  if (raw) {
+    try {
+      const { iat, exp, ...data } = jwt.verify(raw, process.env.SESSION_SECRET);
+      req.session = data;
+    } catch { /* expired or tampered — start fresh */ }
+  }
+
+  // Write helper
+  const persistSession = () => {
+    if (req.session === null) {
+      res.clearCookie(SESSION_COOKIE, { path: '/' });
+      return;
+    }
+    if (Object.keys(req.session).length === 0) return;
+    const token = jwt.sign(req.session, process.env.SESSION_SECRET, { expiresIn: '24h' });
+    res.cookie(SESSION_COOKIE, token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'lax',
+      maxAge: SESSION_MAX_AGE,
+      path: '/',
+    });
+  };
+
+  // Hook redirect & json so session is always saved before response goes out
+  const origRedirect = res.redirect.bind(res);
+  res.redirect = (urlOrStatus, url) => {
+    persistSession();
+    return typeof urlOrStatus === 'number'
+      ? origRedirect(urlOrStatus, url)
+      : origRedirect(urlOrStatus);
+  };
+
+  const origJson = res.json.bind(res);
+  res.json = (body) => {
+    persistSession();
+    return origJson(body);
+  };
+
+  next();
+});
+
+// ── CSRF Protection ───────────────────────────────────────────────────────────
 const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => process.env.SESSION_SECRET,
-  getSessionIdentifier: (req) => {
-    if (!req.session.csrfSecret) {
-      req.session.csrfSecret = crypto.randomBytes(16).toString('hex');
-    }
-    return req.session.csrfSecret;
-  },
+  getSessionIdentifier: (req) => req.session?.user?.email || req.cookies?.[SESSION_COOKIE] || 'anon',
   cookieName: '_csrf',
-  cookieOptions: { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' },
+  cookieOptions: { httpOnly: true, sameSite: 'lax', secure: isProd },
   getTokenFromRequest: (req) => req.headers['x-csrf-token'],
 });
 
-// Endpoint to get CSRF token — frontend calls this on load
-// Writing to the session forces express-session to persist it and send
-// a stable session cookie, which csrf-csrf needs to validate future tokens.
 app.get('/api/csrf-token', (req, res) => {
-  req.session.csrfInit = true;
   const token = generateCsrfToken(req, res);
   res.json({ csrfToken: token });
 });
 
-// Apply CSRF protection to all state-changing requests (POST/PUT/DELETE)
 app.use((req, res, next) => {
-  // Skip CSRF for GET/HEAD/OPTIONS and OAuth callback
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.path.startsWith('/auth/')) {
     return next();
   }
@@ -95,32 +126,23 @@ app.use('/api/workspace',     workspaceRoutes);
 app.use('/api/email-status',  emailStatusRoutes);
 app.use('/api/tickets',       ticketRoutes);
 
-// GET /api/profile
 app.get('/api/profile', requireAuth, (req, res) => {
   res.json(req.session.user);
 });
 
-// ── Local dev server (not used by Vercel serverless) ─────────────────────────
-if (process.env.NODE_ENV !== 'production') {
+// ── Local dev server ──────────────────────────────────────────────────────────
+if (!isProd) {
   const server = app.listen(PORT, () => {
     console.log(`\n✅  MailFlow server  →  http://localhost:${PORT}`);
     console.log(`🔐  Login           →  http://localhost:${PORT}/auth/google`);
-    console.log(`📧  Emails API      →  http://localhost:${PORT}/api/emails`);
     if (!process.env.GROQ_API_KEY) console.warn('\n⚠️   GROQ_API_KEY not set\n');
-    else console.log('✨  Groq AI         →  enabled\n');
-    if (!process.env.MONGODB_URI) console.warn('⚠️   MONGODB_URI not set — no database\n');
+    if (!process.env.MONGODB_URI)  console.warn('⚠️   MONGODB_URI not set — no database\n');
   });
-
   server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.error(`\n❌  Port ${PORT} is already in use.`);
-      console.error(`    Get-Process -Id (Get-NetTCPConnection -LocalPort ${PORT}).OwningProcess | Stop-Process -Force\n`);
-    } else {
-      console.error('Server error:', err.message);
-    }
+    if (err.code === 'EADDRINUSE') console.error(`\n❌  Port ${PORT} is already in use.\n`);
+    else console.error('Server error:', err.message);
     process.exit(1);
   });
 }
 
 export default app;
-

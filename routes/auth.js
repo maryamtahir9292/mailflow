@@ -9,9 +9,6 @@ const router = express.Router();
 
 // GET /auth/status
 router.get('/status', (req, res) => {
-  console.log('[status] cookies present:', !!req.headers.cookie);
-  console.log('[status] session keys:', Object.keys(req.session || {}));
-  console.log('[status] has tokens:', !!req.session?.tokens);
   if (req.session?.tokens) {
     res.json({ loggedIn: true, user: req.session.user || null });
   } else {
