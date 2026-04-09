@@ -7,22 +7,11 @@ import User from '../models/User.js';
 import Workspace from '../models/Workspace.js';
 
 const isProd = process.env.NODE_ENV === 'production';
-const SESSION_COOKIE = 'mf_session';
 
-// Send a 200 HTML page that sets the cookie and redirects via JS.
-// Vercel's edge strips Set-Cookie from 302 responses — a 200 body is reliable.
-function htmlRedirect(res, redirectUrl, sessionData) {
-  if (sessionData) {
-    const token = jwt.sign(sessionData, process.env.SESSION_SECRET, { expiresIn: '24h' });
-    res.cookie(SESSION_COOKIE, token, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000,
-      path: '/',
-    });
-    console.log('[auth] cookie set, token length:', token.length, 'secure:', isProd, 'hasTokens:', !!sessionData.tokens, 'hasUser:', !!sessionData.user);
-  }
+// Redirect via a 200 HTML page so Vercel edge doesn't interfere.
+// The session JWT is embedded in the URL hash — never sent to server,
+// never stripped by Vercel, read by the client and stored in localStorage.
+function htmlRedirect(res, redirectUrl) {
   res.setHeader('Cache-Control', 'no-store, no-cache, private');
   const safeUrl = JSON.stringify(redirectUrl);
   res.send(`<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -35,10 +24,9 @@ const router = express.Router();
 // GET /auth/status
 router.get('/status', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, private');
-  const hasCookie = !!req.cookies?.[SESSION_COOKIE];
   const hasTokens = !!req.session?.tokens;
-  console.log('[status] cookie:', hasCookie, '| session.tokens:', hasTokens, '| loggedIn:', hasTokens);
-  if (req.session?.tokens) {
+  console.log('[status] tokens:', hasTokens, '| user:', req.session?.user?.email || 'none');
+  if (hasTokens) {
     res.json({ loggedIn: true, user: req.session.user || null });
   } else {
     res.json({ loggedIn: false });
@@ -53,21 +41,18 @@ router.get('/google', (_req, res) => {
 // GET /auth/callback — handle OAuth return
 router.get('/callback', async (req, res) => {
   const { code } = req.query;
-  if (!code) return res.redirect(`${process.env.CLIENT_ORIGIN}?error=no_code`);
+  if (!code) return htmlRedirect(res, `${process.env.CLIENT_ORIGIN}?error=no_code`);
 
   try {
     const oauth2Client = createOAuthClient();
     const { tokens } = await oauth2Client.getToken(code);
-    // Strip id_token — it's a large JWT (~1.5KB) we don't need after auth,
-    // and storing it can push the session cookie over the 4KB browser limit.
+    // Strip id_token — large JWT (~1.5KB) not needed after auth
     const { id_token: _discarded, ...sessionTokens } = tokens;
-    req.session.tokens = sessionTokens;
 
     oauth2Client.setCredentials(tokens);
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const { data } = await oauth2.userinfo.get();
 
-    // Basic user info — always saved in session
     const userInfo = {
       name:    data.name,
       email:   data.email,
@@ -78,10 +63,7 @@ router.get('/callback', async (req, res) => {
     // ── Save to MongoDB if connected ──────────────────────────────────────────
     if (isDBConnected()) {
       try {
-        // Check if workspace exists
         let workspace = await Workspace.findOne();
-
-        // First ever login — create the workspace
         if (!workspace) {
           workspace = await Workspace.create({
             name: 'Support Team',
@@ -91,14 +73,10 @@ router.get('/callback', async (req, res) => {
           });
         }
 
-        // Find or create user in DB
         let dbUser = await User.findOne({ googleId: data.id });
-
         if (!dbUser) {
-          // First user ever = owner, everyone after = agent
           const totalUsers = await User.countDocuments();
           const role = totalUsers === 0 ? 'owner' : 'agent';
-
           dbUser = await User.create({
             googleId:    data.id,
             email:       data.email,
@@ -107,38 +85,37 @@ router.get('/callback', async (req, res) => {
             role,
             workspaceId: workspace._id,
           });
-
-          // Add to workspace — role only lives in User model
           if (role === 'owner') workspace.ownerId = dbUser._id;
           workspace.members.push({ userId: dbUser._id });
           await workspace.save();
-
           console.log(`✅ New user: ${dbUser.email} (${role})`);
         } else {
-          // Existing user — update last login time
           await dbUser.updateLastLogin();
           console.log(`🔄 Login: ${dbUser.email} (${dbUser.role})`);
         }
 
-        // Save DB info to session
         userInfo.id      = dbUser._id.toString();
         userInfo.role    = dbUser.role;
         userInfo.dbSaved = true;
-
       } catch (dbErr) {
         console.error('⚠️  DB error (login still works):', dbErr.message);
       }
     }
 
-    req.session.user = userInfo;
-    htmlRedirect(res, `${process.env.CLIENT_ORIGIN}?auth=success`, {
-      tokens: req.session.tokens,
-      user:   req.session.user,
-    });
+    // Sign session as a JWT and embed in redirect URL hash.
+    // The hash is never sent to the server — Vercel can't strip it.
+    // The React client reads it from window.location.hash and stores in localStorage.
+    const sessionJwt = jwt.sign(
+      { tokens: sessionTokens, user: userInfo },
+      process.env.SESSION_SECRET,
+      { expiresIn: '24h' }
+    );
+    console.log('[auth] session JWT created for:', userInfo.email);
+    htmlRedirect(res, `${process.env.CLIENT_ORIGIN}#t=${encodeURIComponent(sessionJwt)}`);
 
   } catch (err) {
     console.error('OAuth callback error:', err.message);
-    htmlRedirect(res, `${process.env.CLIENT_ORIGIN}?error=auth_failed`, null);
+    htmlRedirect(res, `${process.env.CLIENT_ORIGIN}?error=auth_failed`);
   }
 });
 

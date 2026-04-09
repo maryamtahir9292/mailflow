@@ -43,16 +43,27 @@ if (!process.env.SESSION_SECRET) {
 connectDB();
 
 // ── Middleware ────────────────────────────────────────────────────────────────
-app.use(cors({ origin: process.env.CLIENT_ORIGIN, credentials: true }));
+app.use(cors({
+  origin: process.env.CLIENT_ORIGIN,
+  credentials: true,
+  exposedHeaders: ['X-Session-Token'],
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
 // ── JWT Session Middleware ────────────────────────────────────────────────────
-// Reads session from a signed JWT cookie. Intercepts res.json/res.redirect to
-// write the (possibly modified) session back as a cookie on every response.
+// Reads session JWT from:
+//   1. Authorization: Bearer <token>  header (primary — SPA localStorage flow)
+//   2. mf_session cookie              (fallback — local dev)
+// Returns a fresh signed JWT in X-Session-Token response header so the client
+// can persist refreshed OAuth tokens (e.g. after Google access-token renewal).
 app.use((req, res, next) => {
   // Read
-  const raw = req.cookies?.[SESSION_COOKIE];
+  const authHeader = req.headers['authorization'];
+  const raw = authHeader?.startsWith('Bearer ')
+    ? authHeader.slice(7)
+    : req.cookies?.[SESSION_COOKIE];
+
   req.session = {};
   if (raw) {
     try {
@@ -61,7 +72,7 @@ app.use((req, res, next) => {
     } catch { /* expired or tampered — start fresh */ }
   }
 
-  // Write helper
+  // Write helper — called before every JSON/redirect response
   const persistSession = () => {
     if (req.session === null) {
       res.clearCookie(SESSION_COOKIE, { path: '/' });
@@ -69,6 +80,9 @@ app.use((req, res, next) => {
     }
     if (Object.keys(req.session).length === 0) return;
     const token = jwt.sign(req.session, process.env.SESSION_SECRET, { expiresIn: '24h' });
+    // Header-based (SPA) — client reads this and updates localStorage
+    res.setHeader('X-Session-Token', token);
+    // Cookie-based fallback (local dev)
     res.cookie(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: isProd,
@@ -78,7 +92,6 @@ app.use((req, res, next) => {
     });
   };
 
-  // Hook redirect & json so session is always saved before response goes out
   const origRedirect = res.redirect.bind(res);
   res.redirect = (urlOrStatus, url) => {
     persistSession();
