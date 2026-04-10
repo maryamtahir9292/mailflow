@@ -1,6 +1,18 @@
+import { useState } from 'react';
 import './Login.css';
 
 export default function Login({ onLogin }) {
+  // Read error param — shows helpful message when redirected back after auth failure
+  const params = new URLSearchParams(window.location.search);
+  const error = params.get('error');
+
+  let errorMessage = null;
+  if (error === 'gmail_permission_required') {
+    errorMessage = 'Gmail access was not granted. Please sign in again and tick BOTH Gmail checkboxes (Read + Send).';
+  } else if (error === 'session_expired' || error === 'auth_failed') {
+    errorMessage = 'Your session expired. Please sign in again.';
+  }
+
   return (
     <div className="login-page">
       <div className="login-card">
@@ -20,6 +32,29 @@ export default function Login({ onLogin }) {
           Auto-categorize inquiries and respond with AI assistance.
         </p>
 
+        {/* Error banner — shown when redirected back after failed auth */}
+        {errorMessage && (
+          <div style={{
+            background: '#fef2f2',
+            border: '1px solid #fca5a5',
+            borderRadius: '8px',
+            padding: '12px 14px',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '8px',
+            color: '#991b1b',
+            fontSize: '13px',
+            lineHeight: '1.5',
+            textAlign: 'left',
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: '1px' }}>
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            {errorMessage}
+          </div>
+        )}
+
         {/* Feature pills */}
         <div className="login-features">
           <div className="feature-pill">
@@ -28,7 +63,7 @@ export default function Login({ onLogin }) {
           </div>
           <div className="feature-pill">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
-            Dutch → English translate
+            Dutch \u2192 English translate
           </div>
           <div className="feature-pill">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2" strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
@@ -52,7 +87,7 @@ export default function Login({ onLogin }) {
         </button>
 
         <p className="login-note">
-          Shared team account — one sign-in for the entire support team
+          Shared team account \u2014 one sign-in for the entire support team
         </p>
       </div>
 
