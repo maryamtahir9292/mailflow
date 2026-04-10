@@ -7,7 +7,7 @@ import EmailDetail    from '../components/EmailDetail.jsx';
 import ComposeModal   from '../components/ComposeModal.jsx';
 import './Dashboard.css';
 
-export default function Dashboard({ auth, navigate }) {
+export default function Dashboard({ auth, navigate, notifs }) {
   const emailState             = useEmails(auth.loggedIn);
   const [composing, setComposing] = useState(false);
 
@@ -22,6 +22,7 @@ export default function Dashboard({ auth, navigate }) {
         onCompose={() => setComposing(true)}
         page="inbox"
         navigate={navigate}
+        notifs={notifs}
       />
 
       {composing && <ComposeModal onClose={() => setComposing(false)} />}

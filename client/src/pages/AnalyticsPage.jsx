@@ -169,11 +169,11 @@ function ActivityFeed({ activities }) {
   );
 }
 
-export default function AnalyticsPage({ auth, navigate }) {
+export default function AnalyticsPage({ auth, navigate, notifs }) {
   const { data, loading, error, refetch } = useAnalytics();
   return (
     <div className="analytics-page">
-      <Navbar user={auth.user} onLogout={auth.logout} onSwitch={auth.switchAccount} onRefresh={refetch} loading={loading} page="analytics" navigate={navigate} />
+      <Navbar user={auth.user} onLogout={auth.logout} onSwitch={auth.switchAccount} onRefresh={refetch} loading={loading} page="analytics" navigate={navigate} notifs={notifs} />
       <div className="analytics-content">
         {loading && !data ? (
           <div className="analytics-loading"><Spinner size={28} /><span>Loading analytics…</span></div>

@@ -15,6 +15,7 @@ import workspaceRoutes    from './routes/workspace.js';
 import emailStatusRoutes  from './routes/emailStatus.js';
 import ticketRoutes       from './routes/tickets.js';
 import analyticsRoutes    from './routes/analytics.js';
+import notificationRoutes from './routes/notifications.js';
 
 dotenv.config();
 
@@ -140,6 +141,7 @@ app.use('/api/workspace',     workspaceRoutes);
 app.use('/api/email-status',  emailStatusRoutes);
 app.use('/api/tickets',       ticketRoutes);
 app.use('/api/analytics',     analyticsRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.get('/api/profile', requireAuth, (req, res) => {
   res.json(req.session.user);

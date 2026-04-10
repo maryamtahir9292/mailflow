@@ -1,6 +1,7 @@
+import NotificationBell from './NotificationBell.jsx';
 import './Navbar.css';
 
-export default function Navbar({ user, onLogout, onSwitch, onRefresh, loading, onCompose, page, navigate }) {
+export default function Navbar({ user, onLogout, onSwitch, onRefresh, loading, onCompose, page, navigate, notifs }) {
   return (
     <nav className="navbar">
       {/* Brand */}
@@ -62,8 +63,21 @@ export default function Navbar({ user, onLogout, onSwitch, onRefresh, loading, o
             <path d="M23 4v6h-6" /><path d="M1 20v-6h6" />
             <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
           </svg>
-          {loading ? 'Loading…' : 'Refresh'}
+          {loading ? 'Loading\u2026' : 'Refresh'}
         </button>
+
+        {/* Notification Bell */}
+        {notifs && (
+          <NotificationBell
+            notifications={notifs.notifications}
+            unreadCount={notifs.unreadCount}
+            onMarkRead={notifs.markAllRead}
+            soundEnabled={notifs.soundEnabled}
+            onToggleSound={notifs.setSoundEnabled}
+            permissionState={notifs.permissionState}
+            onRequestPermission={notifs.requestPermission}
+          />
+        )}
 
         {user && (
           <div className="navbar-user">

@@ -25,7 +25,7 @@ const CATEGORIES = [
   { value: 'general',     label: 'General' },
 ];
 
-export default function TicketsPage({ auth, navigate }) {
+export default function TicketsPage({ auth, navigate, notifs }) {
   const ticketState = useTickets();
   const [members, setMembers]           = useState([]);
   const [showCreate, setShowCreate]     = useState(false);
@@ -69,6 +69,7 @@ export default function TicketsPage({ auth, navigate }) {
         onSwitch={auth.switchAccount}
         page="tickets"
         navigate={navigate}
+        notifs={notifs}
       />
 
       <div className="tickets-body">
