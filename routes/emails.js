@@ -192,7 +192,7 @@ router.get('/', requireTokens, async (req, res) => {
       err.status === 400 || err.code === 400 ||
       err.message?.includes('invalid_grant') ||
       err.message?.includes('Token has been expired or revoked') ||
-      err.message?.includes('Invalid Credentials');
+      err.message?.includes('Invalid Credentials') || err.status === 403 || err.code === 403 || err.message?.includes('Insufficient Permission');
     if (isAuthError) {
       req.session.tokens = null;
       return res.status(401).json({ error: 'Session expired — please sign in again' });
@@ -281,7 +281,7 @@ router.get('/:id', requireTokens, async (req, res) => {
       err.status === 400 || err.code === 400 ||
       err.message?.includes('invalid_grant') ||
       err.message?.includes('Token has been expired or revoked') ||
-      err.message?.includes('Invalid Credentials');
+      err.message?.includes('Invalid Credentials') || err.status === 403 || err.code === 403 || err.message?.includes('Insufficient Permission');
     if (isAuthError) {
       return res.status(401).json({ error: 'Session expired — please sign in again' });
     }
