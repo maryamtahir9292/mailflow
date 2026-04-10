@@ -4,7 +4,7 @@ import Spinner from '../components/Spinner.jsx';
 import './AnalyticsPage.css';
 
 function formatHours(h) {
-  if (!h || h === 0) return '\u2014';
+  if (!h || h === 0) return '—';
   if (h < 1) return `${Math.round(h * 60)}m`;
   if (h < 24) return `${h}h`;
   return `${Math.round(h / 24)}d`;
@@ -159,7 +159,7 @@ function ActivityFeed({ activities }) {
           <div className="activity-body">
             <span className="activity-type">{ACTIVITY_LABELS[a.type] || a.type}</span>
             {a.type === 'status_changed' && <span className="activity-detail">{a.from} &rarr; {a.to}</span>}
-            {a.type === 'note' && a.note && <span className="activity-detail">{a.note.slice(0, 60)}{a.note.length > 60 ? '\u2026' : ''}</span>}
+            {a.type === 'note' && a.note && <span className="activity-detail">{a.note.slice(0, 60)}{a.note.length > 60 ? '…' : ''}</span>}
             <span className="activity-ticket">{a.ticketNumber}</span>
           </div>
           <span className="activity-time">{timeAgo(a.at)}</span>
@@ -176,7 +176,7 @@ export default function AnalyticsPage({ auth, navigate }) {
       <Navbar user={auth.user} onLogout={auth.logout} onSwitch={auth.switchAccount} onRefresh={refetch} loading={loading} page="analytics" navigate={navigate} />
       <div className="analytics-content">
         {loading && !data ? (
-          <div className="analytics-loading"><Spinner size={28} /><span>Loading analytics\u2026</span></div>
+          <div className="analytics-loading"><Spinner size={28} /><span>Loading analytics…</span></div>
         ) : error ? (
           <div className="analytics-error"><p>Failed to load analytics: {error}</p><button onClick={refetch}>Retry</button></div>
         ) : data ? (
@@ -190,7 +190,7 @@ export default function AnalyticsPage({ auth, navigate }) {
               <StatCard label="Emails Handled" value={data.summary.emailsDone} sub={`${data.summary.emailsPending} pending`} color="#f97316" icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>} />
             </div>
             <div className="chart-grid">
-              <div className="chart-card chart-card--wide"><h3>Ticket Volume \u2014 Last 30 Days</h3><VolumeChart data={data.dailyVolume} /></div>
+              <div className="chart-card chart-card--wide"><h3>Ticket Volume — Last 30 Days</h3><VolumeChart data={data.dailyVolume} /></div>
               <div className="chart-card"><h3>Status Breakdown</h3><DonutChart data={data.statusBreakdown} colorMap={STATUS_COLORS} /></div>
             </div>
             <div className="chart-grid">
