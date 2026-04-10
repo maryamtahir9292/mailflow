@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
+import { useCannedResponses } from '../hooks/useCannedResponses.js';
+import CannedResponsesPanel from './CannedResponsesPanel.jsx';
 import Spinner from './Spinner.jsx';
 import './AiReplyPanel.css';
 
@@ -24,6 +26,21 @@ export default function AiReplyPanel({ email, onReplySent }) {
   const [translated,  setTranslated]  = useState(null);  // { language, wasTranslated, translatedReply }
   const [sent,        setSent]        = useState(false);
   const [error,       setError]       = useState('');
+  const [showTemplates, setShowTemplates] = useState(false);
+  const templateRef = useRef(null);
+  const canned = useCannedResponses();
+
+  // Close templates panel when clicking outside
+  useEffect(() => {
+    if (!showTemplates) return;
+    const handler = (e) => {
+      if (templateRef.current && !templateRef.current.contains(e.target)) {
+        setShowTemplates(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showTemplates]);
 
   const reset = () => {
     setStep('write');
@@ -173,6 +190,33 @@ export default function AiReplyPanel({ email, onReplySent }) {
                         ? <><Spinner size={12} color="white" /> Generating…</>
                         : <>{reply ? '↺ Regenerate' : '✨ Generate AI Draft'}</>}
                     </button>
+
+                    <div className="ai-template-wrap" ref={templateRef}>
+                      <button
+                        className={`ai-btn ai-btn--template ${showTemplates ? 'ai-btn--template-active' : ''}`}
+                        onClick={() => setShowTemplates(!showTemplates)}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                          <path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>
+                        </svg>
+                        Templates
+                      </button>
+                      {showTemplates && (
+                        <div className="ai-template-dropdown">
+                          <CannedResponsesPanel
+                            responses={canned.responses}
+                            loading={canned.loading}
+                            onInsert={(text) => { setReply(text); setShowTemplates(false); }}
+                            onSeed={canned.seed}
+                            onCreate={canned.create}
+                            onUpdate={canned.update}
+                            onRemove={canned.remove}
+                            onUse={canned.use}
+                          />
+                        </div>
+                      )}
+                    </div>
 
                     {reply && !generating && (
                       <button className="ai-btn ai-btn--clear" onClick={reset}>

@@ -16,6 +16,7 @@ import emailStatusRoutes  from './routes/emailStatus.js';
 import ticketRoutes       from './routes/tickets.js';
 import analyticsRoutes    from './routes/analytics.js';
 import notificationRoutes from './routes/notifications.js';
+import cannedRoutes       from './routes/cannedResponses.js';
 
 dotenv.config();
 
@@ -142,6 +143,7 @@ app.use('/api/email-status',  emailStatusRoutes);
 app.use('/api/tickets',       ticketRoutes);
 app.use('/api/analytics',     analyticsRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/canned-responses', cannedRoutes);
 
 app.get('/api/profile', requireAuth, (req, res) => {
   res.json(req.session.user);
