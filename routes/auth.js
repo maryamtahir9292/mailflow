@@ -48,6 +48,12 @@ router.get('/callback', async (req, res) => {
     const { tokens } = await oauth2Client.getToken(code);
     // Strip id_token — large JWT (~1.5KB) not needed after auth
     const { id_token: _discarded, ...sessionTokens } = tokens;
+    // Verify Gmail scopes were actually granted — if user unchecked them, redirect immediately
+    const grantedScopes = (tokens.scope || '').split(' ');
+    if (!grantedScopes.some(s => s.includes('gmail'))) {
+      console.warn('[auth] Gmail scopes missing — user must re-auth and grant Gmail access');
+      return htmlRedirect(res, `${process.env.CLIENT_ORIGIN}?error=gmail_permission_required`);
+    }
 
     oauth2Client.setCredentials(tokens);
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
