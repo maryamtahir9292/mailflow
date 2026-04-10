@@ -3,12 +3,23 @@ import mongoose from 'mongoose';
 const emailStatusSchema = new mongoose.Schema({
   emailId: { type: String, required: true, unique: true, index: true },
 
-  // Workflow state
+  // Pipeline status — support queue workflow
   status: {
     type: String,
-    enum: ['pending', 'done'],
-    default: 'pending',
+    enum: ['new', 'open', 'awaiting_reply', 'resolved', 'pending', 'done'],
+    default: 'new',
   },
+
+  // Priority — computed or manual override
+  priority: {
+    type: String,
+    enum: ['urgent', 'high', 'normal', 'low'],
+    default: 'normal',
+  },
+
+  // Track reply state for smart transitions
+  lastRepliedAt:  { type: Date, default: null },
+  replyCount:     { type: Number, default: 0 },
 
   // Callback tracking
   needsCallback: { type: Boolean, default: false },

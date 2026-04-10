@@ -18,6 +18,44 @@ function dateGroup(dateStr) {
   return 'older';
 }
 
+/** Pipeline status metadata */
+export const PIPELINE_STATUSES = {
+  new:             { label: 'New',             color: '#3b82f6', bg: '#eff6ff', icon: 'inbox' },
+  open:            { label: 'Open',            color: '#f59e0b', bg: '#fffbeb', icon: 'folder-open' },
+  awaiting_reply:  { label: 'Awaiting Reply',  color: '#8b5cf6', bg: '#faf5ff', icon: 'clock' },
+  resolved:        { label: 'Resolved',        color: '#10b981', bg: '#f0fdf4', icon: 'check' },
+};
+
+/** Smart sort — prioritize what needs attention most */
+function smartSort(emails, statusMap, callbackIds) {
+  return [...emails].sort((a, b) => {
+    const sa = statusMap.get(a.id) || {};
+    const sb = statusMap.get(b.id) || {};
+
+    // 1. Priority weight: urgent=0, high=1, normal=2, low=3
+    const prioOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
+    const pa = prioOrder[sa.priority] ?? 2;
+    const pb = prioOrder[sb.priority] ?? 2;
+    if (pa !== pb) return pa - pb;
+
+    // 2. Callbacks float to top
+    const aCb = callbackIds.has(a.id) ? 0 : 1;
+    const bCb = callbackIds.has(b.id) ? 0 : 1;
+    if (aCb !== bCb) return aCb - bCb;
+
+    // 3. Status order: new first, then open, then awaiting
+    const statusOrder = { new: 0, open: 1, awaiting_reply: 2, pending: 1, resolved: 3, done: 3 };
+    const soa = statusOrder[sa.status] ?? 0;
+    const sob = statusOrder[sb.status] ?? 0;
+    if (soa !== sob) return soa - sob;
+
+    // 4. Oldest unanswered first (longest wait = highest urgency)
+    const da = new Date(a.date).getTime() || 0;
+    const db = new Date(b.date).getTime() || 0;
+    return da - db; // older first within same priority
+  });
+}
+
 // Helper — save status to backend (fire-and-forget, non-blocking)
 function saveStatus(emailId, updates) {
   apiFetch(`/api/email-status/${emailId}`, {
@@ -32,29 +70,38 @@ export function useEmails(loggedIn) {
   const [loadingMore,    setLoadingMore]    = useState(false);
   const [error,          setError]          = useState(null);
   const [nextPageToken,  setNextPageToken]  = useState(null);
-  const [activeCategory, setActiveCategory] = useState('all');
-  const [selectedId,     setSelectedId]     = useState(null); // store ID only
+  const [activeCategory, setActiveCategory] = useState('queue');  // default to smart queue
+  const [selectedId,     setSelectedId]     = useState(null);
   const [callbackIds,    setCallbackIds]    = useState(new Set());
   const [callbackNotes,  setCallbackNotes]  = useState(new Map());
   const [doneIds,        setDoneIds]        = useState(new Set());
+  const [statusMap,      setStatusMap]      = useState(new Map()); // emailId -> { status, priority, ... }
   const [bodyLoading,    setBodyLoading]    = useState(false);
   const callbackNoteTimer = useRef(null);
 
-  // Derive selected email fresh from emails array — avoids stale ref issues
+  // Derive selected email fresh from emails array
   const selectedEmail = useMemo(
     () => emails.find(e => e.id === selectedId) || null,
     [emails, selectedId]
   );
 
-  // Select email and lazily fetch its full body if not yet loaded
+  // Select email and lazily fetch its full body
   const setSelectedEmail = useCallback(async (email) => {
     if (!email?.id) { setSelectedId(null); return; }
     setSelectedId(email.id);
 
-    // Body already loaded — nothing to do
-    if (email.body) return;
+    // Auto-transition: new -> open when agent opens an email
+    const s = statusMap.get(email.id);
+    if (!s || s.status === 'new') {
+      setStatusMap(prev => {
+        const next = new Map(prev);
+        next.set(email.id, { ...(next.get(email.id) || {}), status: 'open' });
+        return next;
+      });
+      saveStatus(email.id, { status: 'open' });
+    }
 
-    // Fetch full body on demand
+    if (email.body) return;
     setBodyLoading(true);
     try {
       const data = await apiFetch(`/api/emails/${email.id}`);
@@ -66,13 +113,11 @@ export function useEmails(loggedIn) {
     } finally {
       setBodyLoading(false);
     }
-  }, []);
+  }, [statusMap]);
 
   const aiUpgradeCategories = useCallback(async (loadedEmails) => {
     if (!loadedEmails.length) return;
     try {
-      // Limit to first 50 — keyword categories cover the rest,
-      // and the Groq free tier is 6000 TPM (~4 batches of 25)
       const payload = loadedEmails.slice(0, 50).map(e => ({
         id: e.id, subject: e.subject, body: e.body, snippet: e.snippet,
       }));
@@ -86,33 +131,70 @@ export function useEmails(loggedIn) {
         ));
       }
     } catch {
-      // Silent — keyword categories already showing, AI upgrade is best-effort
+      // Silent — keyword categories already showing
     }
   }, []);
 
-  // Load saved workflow statuses from MongoDB and apply to local state
+  // Load saved workflow statuses from MongoDB
   const loadSavedStatuses = useCallback(async (loadedEmails) => {
     try {
       const data = await apiFetch('/api/email-status');
-      if (!data.statuses || Object.keys(data.statuses).length === 0) return;
+      if (!data.statuses || Object.keys(data.statuses).length === 0) {
+        // Initialize all loaded emails as 'new' in bulk
+        const ids = loadedEmails.map(e => e.id);
+        apiFetch('/api/email-status/bulk-init', {
+          method: 'POST',
+          body: JSON.stringify({ emailIds: ids }),
+        }).catch(() => {});
+        return;
+      }
 
       const newDoneIds     = new Set();
       const newCallbackIds = new Set();
       const newNotes       = new Map();
+      const newStatusMap   = new Map();
       const categoryOverrides = {};
 
       for (const [emailId, s] of Object.entries(data.statuses)) {
-        if (s.status === 'done')  newDoneIds.add(emailId);
+        // Map old statuses to new pipeline
+        let mappedStatus = s.status;
+        if (mappedStatus === 'done') mappedStatus = 'resolved';
+        if (mappedStatus === 'pending') mappedStatus = 'new';
+
+        newStatusMap.set(emailId, {
+          status:        mappedStatus,
+          priority:      s.priority || 'normal',
+          lastRepliedAt: s.lastRepliedAt,
+          replyCount:    s.replyCount || 0,
+        });
+
+        if (mappedStatus === 'resolved' || s.status === 'done') newDoneIds.add(emailId);
         if (s.needsCallback)      newCallbackIds.add(emailId);
         if (s.callbackNote)       newNotes.set(emailId, s.callbackNote);
         if (s.categoryOverride)   categoryOverrides[emailId] = s.categoryOverride;
       }
 
+      setStatusMap(newStatusMap);
       setDoneIds(newDoneIds);
       setCallbackIds(newCallbackIds);
       setCallbackNotes(newNotes);
 
-      // Apply category overrides to emails
+      // Initialize emails without status
+      const missingIds = loadedEmails
+        .filter(e => !data.statuses[e.id])
+        .map(e => e.id);
+      if (missingIds.length > 0) {
+        apiFetch('/api/email-status/bulk-init', {
+          method: 'POST',
+          body: JSON.stringify({ emailIds: missingIds }),
+        }).catch(() => {});
+        // Set local state for missing
+        missingIds.forEach(id => {
+          newStatusMap.set(id, { status: 'new', priority: 'normal', replyCount: 0 });
+        });
+        setStatusMap(new Map(newStatusMap));
+      }
+
       if (Object.keys(categoryOverrides).length > 0) {
         setEmails(prev => prev.map(e =>
           categoryOverrides[e.id] ? { ...e, category: categoryOverrides[e.id] } : e
@@ -135,7 +217,6 @@ export function useEmails(loggedIn) {
       const loaded = data.emails || [];
       setEmails(loaded);
       setNextPageToken(data.nextPageToken || null);
-      // Load saved statuses + AI upgrade — both non-blocking
       loadSavedStatuses(loaded);
       aiUpgradeCategories(loaded);
     } catch (err) {
@@ -157,7 +238,6 @@ export function useEmails(loggedIn) {
         return [...prev, ...newEmails];
       });
       setNextPageToken(data.nextPageToken || null);
-      // AI upgrade for newly loaded emails
       aiUpgradeCategories(data.emails || []);
     } catch (err) {
       console.error('Load more error:', err.message);
@@ -168,8 +248,6 @@ export function useEmails(loggedIn) {
 
   useEffect(() => { fetchEmails(); }, [fetchEmails]);
 
-  // Auto-load remaining pages when on callbacks tab to find all flagged emails.
-  // callbackIds in deps so this re-runs when loadSavedStatuses settles (it's async).
   useEffect(() => {
     if (activeCategory === 'callbacks' && !loading && !loadingMore && nextPageToken) {
       loadMore();
@@ -181,22 +259,64 @@ export function useEmails(loggedIn) {
       const next = new Set(prev);
       const wasSet = next.has(id);
       wasSet ? next.delete(id) : next.add(id);
-      // Persist to MongoDB
       saveStatus(id, { needsCallback: !wasSet });
       return next;
     });
   }, []);
 
-  const toggleDone = useCallback((id) => {
-    setDoneIds(prev => {
-      const next = new Set(prev);
-      const wasDone = next.has(id);
-      wasDone ? next.delete(id) : next.add(id);
-      // Persist to MongoDB
-      saveStatus(id, { status: wasDone ? 'pending' : 'done' });
+  // Update pipeline status
+  const setEmailStatus = useCallback((id, newStatus) => {
+    setStatusMap(prev => {
+      const next = new Map(prev);
+      next.set(id, { ...(next.get(id) || {}), status: newStatus });
       return next;
     });
+    // Sync doneIds for backward compat
+    if (newStatus === 'resolved') {
+      setDoneIds(prev => new Set(prev).add(id));
+    } else {
+      setDoneIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+    saveStatus(id, { status: newStatus });
   }, []);
+
+  // Set priority
+  const setEmailPriority = useCallback((id, priority) => {
+    setStatusMap(prev => {
+      const next = new Map(prev);
+      next.set(id, { ...(next.get(id) || {}), priority });
+      return next;
+    });
+    saveStatus(id, { priority });
+  }, []);
+
+  // Mark as replied — auto-transition to awaiting_reply
+  const markReplied = useCallback((id) => {
+    setStatusMap(prev => {
+      const next = new Map(prev);
+      const current = next.get(id) || {};
+      next.set(id, {
+        ...current,
+        status: 'awaiting_reply',
+        lastRepliedAt: new Date().toISOString(),
+        replyCount: (current.replyCount || 0) + 1,
+      });
+      return next;
+    });
+    apiFetch(`/api/email-status/${id}/replied`, { method: 'POST' })
+      .catch(() => {});
+  }, []);
+
+  // Legacy toggleDone — maps to resolved/new
+  const toggleDone = useCallback((id) => {
+    const current = statusMap.get(id);
+    const isResolved = current?.status === 'resolved';
+    setEmailStatus(id, isResolved ? 'open' : 'resolved');
+  }, [statusMap, setEmailStatus]);
 
   const setCallbackNote = useCallback((id, note) => {
     setCallbackNotes(prev => {
@@ -204,29 +324,42 @@ export function useEmails(loggedIn) {
       note.trim() ? next.set(id, note) : next.delete(id);
       return next;
     });
-    // Debounce save — don't save on every keystroke
     clearTimeout(callbackNoteTimer.current);
     callbackNoteTimer.current = setTimeout(() => {
       saveStatus(id, { callbackNote: note.trim() });
     }, 800);
   }, []);
 
-  // Recategorize — updates in emails array + persists override to MongoDB
   const recategorize = useCallback((id, newCategory) => {
     setEmails(prev => prev.map(e => e.id === id ? { ...e, category: newCategory } : e));
     saveStatus(id, { categoryOverride: newCategory });
   }, []);
 
+  // Filtered & sorted emails
   const filtered = useMemo(() => {
-    if (activeCategory === 'callbacks')  return emails.filter(e => callbackIds.has(e.id));
-    if (activeCategory === 'done')       return emails.filter(e => doneIds.has(e.id));
-    if (activeCategory === 'pending')    return emails.filter(e => !doneIds.has(e.id));
-    if (activeCategory === 'today')      return emails.filter(e => dateGroup(e.date) === 'today');
-    if (activeCategory === 'yesterday')  return emails.filter(e => dateGroup(e.date) === 'yesterday');
-    if (activeCategory === 'older')      return emails.filter(e => dateGroup(e.date) === 'older');
-    if (activeCategory === 'all')        return emails;
+    let result;
+
+    if (activeCategory === 'queue') {
+      // Smart queue: show everything except resolved, smart-sorted
+      result = emails.filter(e => {
+        const s = statusMap.get(e.id);
+        return !s || (s.status !== 'resolved');
+      });
+      return smartSort(result, statusMap, callbackIds);
+    }
+    if (activeCategory === 'new')             return emails.filter(e => { const s = statusMap.get(e.id); return !s || s.status === 'new'; });
+    if (activeCategory === 'open')            return emails.filter(e => statusMap.get(e.id)?.status === 'open');
+    if (activeCategory === 'awaiting_reply')  return emails.filter(e => statusMap.get(e.id)?.status === 'awaiting_reply');
+    if (activeCategory === 'resolved')        return emails.filter(e => statusMap.get(e.id)?.status === 'resolved' || doneIds.has(e.id));
+    if (activeCategory === 'callbacks')       return emails.filter(e => callbackIds.has(e.id));
+    if (activeCategory === 'done')            return emails.filter(e => doneIds.has(e.id));
+    if (activeCategory === 'pending')         return emails.filter(e => !doneIds.has(e.id));
+    if (activeCategory === 'today')           return emails.filter(e => dateGroup(e.date) === 'today');
+    if (activeCategory === 'yesterday')       return emails.filter(e => dateGroup(e.date) === 'yesterday');
+    if (activeCategory === 'older')           return emails.filter(e => dateGroup(e.date) === 'older');
+    if (activeCategory === 'all')             return emails;
     return emails.filter(e => e.category === activeCategory);
-  }, [activeCategory, emails, callbackIds, doneIds]);
+  }, [activeCategory, emails, callbackIds, doneIds, statusMap]);
 
   const counts = useMemo(() => {
     const acc = CATEGORIES.reduce((a, cat) => {
@@ -235,6 +368,24 @@ export function useEmails(loggedIn) {
         : emails.filter(e => e.category === cat.id).length;
       return a;
     }, {});
+
+    // Pipeline counts
+    let newCount = 0, openCount = 0, awaitingCount = 0, resolvedCount = 0;
+    for (const e of emails) {
+      const s = statusMap.get(e.id);
+      const status = s?.status || 'new';
+      if (status === 'new')             newCount++;
+      else if (status === 'open')       openCount++;
+      else if (status === 'awaiting_reply') awaitingCount++;
+      else if (status === 'resolved' || status === 'done') resolvedCount++;
+      else newCount++; // fallback for 'pending'
+    }
+    acc.queue           = newCount + openCount + awaitingCount; // actionable items
+    acc.new_status      = newCount;
+    acc.open            = openCount;
+    acc.awaiting_reply  = awaitingCount;
+    acc.resolved        = resolvedCount;
+
     acc.callbacks  = emails.filter(e => callbackIds.has(e.id)).length;
     acc.done       = emails.filter(e => doneIds.has(e.id)).length;
     acc.pending    = emails.filter(e => !doneIds.has(e.id)).length;
@@ -242,7 +393,7 @@ export function useEmails(loggedIn) {
     acc.yesterday  = emails.filter(e => dateGroup(e.date) === 'yesterday').length;
     acc.older      = emails.filter(e => dateGroup(e.date) === 'older').length;
     return acc;
-  }, [emails, callbackIds, doneIds]);
+  }, [emails, callbackIds, doneIds, statusMap]);
 
   return {
     emails, filtered, loading, loadingMore, error,
@@ -254,5 +405,7 @@ export function useEmails(loggedIn) {
     callbackIds, toggleCallback,
     callbackNotes, setCallbackNote,
     doneIds, toggleDone,
+    // New pipeline features
+    statusMap, setEmailStatus, setEmailPriority, markReplied,
   };
 }

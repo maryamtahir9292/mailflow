@@ -21,13 +21,17 @@ function formatFullDate(raw) {
   });
 }
 
-export default function EmailDetail({ email, user, onCategoryChange, onToggleCallback, isCallbackSet, callbackNote, onCallbackNoteChange, isDone, onToggleDone }) {
+export default function EmailDetail({ email, user, onCategoryChange, onToggleCallback, isCallbackSet, callbackNote, onCallbackNoteChange, isDone, onToggleDone, emailStatus, onStatusChange, onPriorityChange, onMarkReplied }) {
   const [translating,     setTranslating]     = useState(false);
   const [translation,     setTranslation]     = useState(null);
   const [showTranslation, setShowTranslation] = useState(false);
   const [showCatPicker,   setShowCatPicker]   = useState(false);
-  const [catSuggestion,   setCatSuggestion]   = useState(null);  // { suggestedCategory, confidence, reason }
-  const catPickerRef = useRef(null);
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
+  const [showPrioPicker,   setShowPrioPicker]   = useState(false);
+  const [catSuggestion,   setCatSuggestion]   = useState(null);
+  const catPickerRef    = useRef(null);
+  const statusPickerRef = useRef(null);
+  const prioPickerRef   = useRef(null);
 
   // Reset state when email changes
   useEffect(() => {
@@ -35,20 +39,23 @@ export default function EmailDetail({ email, user, onCategoryChange, onToggleCal
     setTranslating(false);
     setShowTranslation(false);
     setShowCatPicker(false);
+    setShowStatusPicker(false);
+    setShowPrioPicker(false);
     setCatSuggestion(null);
   }, [email?.id]);
 
-  // Close picker when clicking outside
+  // Close pickers when clicking outside
   useEffect(() => {
-    if (!showCatPicker) return;
+    const anyOpen = showCatPicker || showStatusPicker || showPrioPicker;
+    if (!anyOpen) return;
     const handler = (e) => {
-      if (catPickerRef.current && !catPickerRef.current.contains(e.target)) {
-        setShowCatPicker(false);
-      }
+      if (showCatPicker && catPickerRef.current && !catPickerRef.current.contains(e.target)) setShowCatPicker(false);
+      if (showStatusPicker && statusPickerRef.current && !statusPickerRef.current.contains(e.target)) setShowStatusPicker(false);
+      if (showPrioPicker && prioPickerRef.current && !prioPickerRef.current.contains(e.target)) setShowPrioPicker(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [showCatPicker]);
+  }, [showCatPicker, showStatusPicker, showPrioPicker]);
 
   if (!email) {
     return (
@@ -219,6 +226,124 @@ export default function EmailDetail({ email, user, onCategoryChange, onToggleCal
           </button>
         </div>
 
+        {/* ── Pipeline controls — status & priority ─────────────────── */}
+        <div className="detail-pipeline-bar">
+          {/* Status picker */}
+          <div className="pipeline-picker-wrap" ref={statusPickerRef}>
+            <button
+              className="pipeline-status-btn"
+              onClick={() => setShowStatusPicker(!showStatusPicker)}
+              style={{
+                background: { new: '#eff6ff', open: '#fffbeb', awaiting_reply: '#faf5ff', resolved: '#f0fdf4' }[emailStatus?.status] || '#eff6ff',
+                color: { new: '#3b82f6', open: '#f59e0b', awaiting_reply: '#8b5cf6', resolved: '#10b981' }[emailStatus?.status] || '#3b82f6',
+                borderColor: { new: '#bfdbfe', open: '#fde68a', awaiting_reply: '#ddd6fe', resolved: '#bbf7d0' }[emailStatus?.status] || '#bfdbfe',
+              }}
+            >
+              {{ new: 'New', open: 'Open', awaiting_reply: 'Awaiting Reply', resolved: 'Resolved' }[emailStatus?.status] || 'New'}
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ marginLeft: 4 }}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            {showStatusPicker && (
+              <div className="pipeline-dropdown">
+                <p className="pipeline-dropdown-label">Set Status</p>
+                {[
+                  { id: 'new',            label: 'New',            color: '#3b82f6', bg: '#eff6ff' },
+                  { id: 'open',           label: 'Open',           color: '#f59e0b', bg: '#fffbeb' },
+                  { id: 'awaiting_reply', label: 'Awaiting Reply', color: '#8b5cf6', bg: '#faf5ff' },
+                  { id: 'resolved',       label: 'Resolved',       color: '#10b981', bg: '#f0fdf4' },
+                ].map(s => (
+                  <button
+                    key={s.id}
+                    className={`pipeline-dropdown-option ${emailStatus?.status === s.id ? 'pipeline-dropdown-option--active' : ''}`}
+                    onClick={() => { onStatusChange(email.id, s.id); setShowStatusPicker(false); }}
+                  >
+                    <span className="pipeline-dropdown-dot" style={{ background: s.color }} />
+                    {s.label}
+                    {emailStatus?.status === s.id && (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" style={{ marginLeft: 'auto' }}>
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Priority picker */}
+          <div className="pipeline-picker-wrap" ref={prioPickerRef}>
+            <button
+              className="pipeline-priority-btn"
+              onClick={() => setShowPrioPicker(!showPrioPicker)}
+              style={{
+                color: { urgent: '#dc2626', high: '#f97316', normal: '#64748b', low: '#94a3b8' }[emailStatus?.priority] || '#64748b',
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                <line x1="4" y1="22" x2="4" y2="15"/>
+              </svg>
+              {{ urgent: 'Urgent', high: 'High', normal: 'Normal', low: 'Low' }[emailStatus?.priority] || 'Normal'}
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ marginLeft: 3 }}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            {showPrioPicker && (
+              <div className="pipeline-dropdown">
+                <p className="pipeline-dropdown-label">Set Priority</p>
+                {[
+                  { id: 'urgent', label: 'Urgent', color: '#dc2626' },
+                  { id: 'high',   label: 'High',   color: '#f97316' },
+                  { id: 'normal', label: 'Normal', color: '#64748b' },
+                  { id: 'low',    label: 'Low',    color: '#94a3b8' },
+                ].map(p => (
+                  <button
+                    key={p.id}
+                    className={`pipeline-dropdown-option ${emailStatus?.priority === p.id ? 'pipeline-dropdown-option--active' : ''}`}
+                    onClick={() => { onPriorityChange(email.id, p.id); setShowPrioPicker(false); }}
+                  >
+                    <span className="pipeline-dropdown-dot" style={{ background: p.color }} />
+                    {p.label}
+                    {emailStatus?.priority === p.id && (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" style={{ marginLeft: 'auto' }}>
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Quick-resolve button */}
+          {emailStatus?.status !== 'resolved' && (
+            <button
+              className="pipeline-resolve-btn"
+              onClick={() => onStatusChange(email.id, 'resolved')}
+              title="Mark as Resolved"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              Resolve
+            </button>
+          )}
+          {emailStatus?.status === 'resolved' && (
+            <button
+              className="pipeline-reopen-btn"
+              onClick={() => onStatusChange(email.id, 'open')}
+              title="Reopen this email"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <polyline points="1 4 1 10 7 10"/>
+                <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+              </svg>
+              Reopen
+            </button>
+          )}
+        </div>
+
       </div>
 
       {/* ── Email body ─────────────────────────────────────────────────── */}
@@ -336,7 +461,7 @@ export default function EmailDetail({ email, user, onCategoryChange, onToggleCal
       </div>
 
       {/* ── AI Reply Panel ─────────────────────────────────────────────── */}
-      <AiReplyPanel email={email} user={user} onReplySent={() => !isDone && onToggleDone(email.id)} />
+      <AiReplyPanel email={email} user={user} onReplySent={() => { onMarkReplied?.(email.id); }} />
     </div>
   );
 }

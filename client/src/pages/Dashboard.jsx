@@ -44,6 +44,7 @@ export default function Dashboard({ auth, navigate, notifs }) {
           onLoadMore={emailState.loadMore}
           hasMore={!!emailState.nextPageToken}
           doneIds={emailState.doneIds}
+          statusMap={emailState.statusMap}
         />
         <EmailDetail
           key={emailState.selectedEmail?.id}
@@ -57,6 +58,10 @@ export default function Dashboard({ auth, navigate, notifs }) {
           onCallbackNoteChange={emailState.setCallbackNote}
           isDone={emailState.doneIds?.has(emailState.selectedEmail?.id)}
           onToggleDone={emailState.toggleDone}
+          emailStatus={emailState.statusMap?.get(emailState.selectedEmail?.id)}
+          onStatusChange={emailState.setEmailStatus}
+          onPriorityChange={emailState.setEmailPriority}
+          onMarkReplied={emailState.markReplied}
         />
       </div>
     </div>

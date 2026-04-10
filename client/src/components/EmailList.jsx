@@ -23,18 +23,23 @@ function SkeletonRow({ index }) {
 export default function EmailList({
   emails, loading, loadingMore, error,
   selectedId, onSelect, activeCategory,
-  onLoadMore, hasMore, doneIds,
+  onLoadMore, hasMore, doneIds, statusMap,
 }) {
   const [query, setQuery] = useState('');
 
   const TITLES = {
-    all:       'All Emails',
-    callbacks: 'Needs Callback',
-    done:      'Done Emails',
-    pending:   'Pending Emails',
-    today:     "Today's Emails",
-    yesterday: "Yesterday's Emails",
-    older:     'Older Emails',
+    queue:          'Smart Queue',
+    all:            'All Emails',
+    new:            'New Emails',
+    open:           'Open Emails',
+    awaiting_reply: 'Awaiting Reply',
+    resolved:       'Resolved',
+    callbacks:      'Needs Callback',
+    done:           'Done Emails',
+    pending:        'Pending Emails',
+    today:          "Today's Emails",
+    yesterday:      "Yesterday's Emails",
+    older:          'Older Emails',
   };
   const title = TITLES[activeCategory]
     ?? (activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1));
@@ -122,16 +127,21 @@ export default function EmailList({
         )}
 
         {/* Email rows */}
-        {!loading && !error && visible.map((email, i) => (
-          <EmailRow
-            key={email.id}
-            email={email}
-            index={i}
-            isSelected={email.id === selectedId}
-            onClick={() => onSelect(email)}
-            isDone={doneIds?.has(email.id)}
-          />
-        ))}
+        {!loading && !error && visible.map((email, i) => {
+          const s = statusMap?.get(email.id);
+          return (
+            <EmailRow
+              key={email.id}
+              email={email}
+              index={i}
+              isSelected={email.id === selectedId}
+              onClick={() => onSelect(email)}
+              isDone={doneIds?.has(email.id)}
+              status={s?.status}
+              priority={s?.priority}
+            />
+          );
+        })}
 
         {/* Load more — sentinel for auto-scroll + manual button fallback */}
         {!loading && hasMore && (

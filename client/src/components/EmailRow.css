@@ -128,3 +128,33 @@
 .email-row--done.email-row--selected {
   opacity: 1;
 }
+
+/* ── Status badge ───────────────────────────────────────────────────────── */
+.email-row-status-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+/* ── Priority indicator ─────────────────────────────────────────────────── */
+.email-row-priority {
+  font-size: 11px;
+  font-weight: 800;
+  margin-right: 4px;
+  letter-spacing: -0.5px;
+}
+
+/* ── Wait time indicator ────────────────────────────────────────────────── */
+.email-row-wait {
+  font-size: 10px;
+  font-weight: 600;
+  color: #ef4444;
+  margin-right: 6px;
+  padding: 1px 5px;
+  background: #fef2f2;
+  border-radius: 4px;
+}
