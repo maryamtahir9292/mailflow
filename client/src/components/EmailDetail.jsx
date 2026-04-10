@@ -192,27 +192,6 @@ export default function EmailDetail({ email, user, onCategoryChange, onToggleCal
             )}
             {translateLabel}
           </button>
-          {/* Mark as Done toggle — like callback button */}
-          <button
-            className={`done-btn ${isDone ? 'done-btn--active' : ''}`}
-            onClick={() => onToggleDone(email.id)}
-            title={isDone ? 'Click to mark as pending again' : 'Click to mark as done'}
-          >
-            {isDone ? (
-              /* Filled checkmark circle — done state */
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
-                <polyline points="22 4 12 14.01 9 11.01"/>
-              </svg>
-            ) : (
-              /* Empty circle — not done state */
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <circle cx="12" cy="12" r="10"/>
-              </svg>
-            )}
-            {isDone ? '✓ Marked Done' : 'Mark as Done'}
-          </button>
-
           {/* Callback button */}
           <button
             className={`callback-btn ${isCallbackSet ? 'callback-btn--active' : ''}`}

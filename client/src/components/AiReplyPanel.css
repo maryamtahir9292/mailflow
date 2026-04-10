@@ -512,11 +512,7 @@
   animation: fadeIn 0.2s ease;
 }
 
-/* ── Template button & dropdown ────────────────────────────────────────── */
-.ai-template-wrap {
-  position: relative;
-}
-
+/* ── Template button ────────────────────────────────────────────────────── */
 .ai-btn--template {
   display: inline-flex;
   align-items: center;
@@ -542,10 +538,3 @@
   box-shadow: 0 0 0 2px rgba(245,158,11,0.12);
 }
 
-.ai-template-dropdown {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  width: 380px;
-  z-index: 50;
-}
