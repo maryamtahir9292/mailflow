@@ -357,15 +357,12 @@ export function useEmails(loggedIn) {
     if (activeCategory === 'today')           return emails.filter(e => dateGroup(e.date) === 'today');
     if (activeCategory === 'yesterday')       return emails.filter(e => dateGroup(e.date) === 'yesterday');
     if (activeCategory === 'older')           return emails.filter(e => dateGroup(e.date) === 'older');
-    if (activeCategory === 'all')             return emails;
     return emails.filter(e => e.category === activeCategory);
   }, [activeCategory, emails, callbackIds, doneIds, statusMap]);
 
   const counts = useMemo(() => {
     const acc = CATEGORIES.reduce((a, cat) => {
-      a[cat.id] = cat.id === 'all'
-        ? emails.length
-        : emails.filter(e => e.category === cat.id).length;
+      a[cat.id] = emails.filter(e => e.category === cat.id).length;
       return a;
     }, {});
 

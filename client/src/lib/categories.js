@@ -3,7 +3,6 @@
  * Every component that needs category metadata imports from here.
  */
 export const CATEGORIES = [
-  { id: 'all',         label: 'All Emails',   icon: 'all',         bg: null,      color: '#a8c4e0' },
   { id: 'damage',      label: 'Damage',        icon: 'damage',      bg: '#fef2f2', color: '#ef4444' },
   { id: 'returns',     label: 'Returns',       icon: 'returns',     bg: '#faf5ff', color: '#8b5cf6' },
   { id: 'refund',      label: 'Refund',        icon: 'refund',      bg: '#fff1f2', color: '#f43f5e' },
