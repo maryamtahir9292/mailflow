@@ -3,7 +3,7 @@ import Ticket from '../models/Ticket.js';
 import EmailStatus from '../models/EmailStatus.js';
 import User from '../models/User.js';
 import { requireTokens } from '../lib/middleware.js';
-import { isDBConnected } from '../lib/db.js';
+import { isDBConnected, connectDB } from '../lib/db.js';
 
 const router = Router();
 
@@ -14,8 +14,19 @@ async function safe(fn, fallback) {
 
 // ── GET /api/analytics/overview ─────────────────────────────────────────────
 router.get('/overview', requireTokens, async (req, res) => {
+  // Ensure DB is connected — try connecting if not yet (handles cold starts)
   if (!isDBConnected()) {
-    return res.status(503).json({ error: 'Database not connected' });
+    await connectDB();
+  }
+  // If still not connected, return empty dashboard rather than an error
+  if (!isDBConnected()) {
+    return res.json({
+      summary: { totalTickets: 0, todayTickets: 0, weekTickets: 0, resolvedTickets: 0, openTickets: 0, resolutionRate: 0, emailsDone: 0, emailsPending: 0, emailsAwaiting: 0 },
+      resolution: { avgHours: 0, minHours: 0, maxHours: 0, resolvedCount: 0 },
+      statusBreakdown: { new: 0, open: 0, pending: 0, resolved: 0, closed: 0 },
+      priorityBreakdown: { low: 0, medium: 0, high: 0, urgent: 0 },
+      categoryBreakdown: [], dailyVolume: [], agentPerformance: [], recentActivity: [],
+    });
   }
 
   try {
