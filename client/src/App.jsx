@@ -3,11 +3,12 @@ import { useAuth }    from './hooks/useAuth.js';
 import Login          from './pages/Login.jsx';
 import Dashboard      from './pages/Dashboard.jsx';
 import TicketsPage    from './pages/TicketsPage.jsx';
+import AnalyticsPage  from './pages/AnalyticsPage.jsx';
 import Spinner        from './components/Spinner.jsx';
 
 export default function App() {
   const auth = useAuth();
-  const [page, setPage] = useState('inbox'); // 'inbox' | 'tickets'
+  const [page, setPage] = useState('inbox'); // 'inbox' | 'tickets' | 'analytics'
 
   // Clean up OAuth redirect params from URL
   useEffect(() => {
@@ -48,5 +49,6 @@ export default function App() {
   if (!auth.loggedIn) return <Login onLogin={auth.login} />;
 
   if (page === 'tickets') return <TicketsPage auth={auth} navigate={setPage} />;
+  if (page === 'analytics') return <AnalyticsPage auth={auth} navigate={setPage} />;
   return <Dashboard auth={auth} navigate={setPage} />;
 }

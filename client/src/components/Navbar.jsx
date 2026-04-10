@@ -31,6 +31,12 @@ export default function Navbar({ user, onLogout, onSwitch, onRefresh, loading, o
           >
             Tickets
           </button>
+          <button
+            className={`navbar-nav-btn ${page === 'analytics' ? 'navbar-nav-btn--active' : ''}`}
+            onClick={() => navigate('analytics')}
+          >
+            Analytics
+          </button>
         </div>
       )}
 
