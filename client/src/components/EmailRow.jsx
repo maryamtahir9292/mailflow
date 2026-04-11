@@ -32,6 +32,14 @@ function senderName(from) {
   return m ? m[1].trim() : from.split('@')[0];
 }
 
+/** Decode HTML entities from Gmail snippet (e.g. &#39; → ') */
+function decodeEntities(str) {
+  if (!str) return '';
+  const el = document.createElement('textarea');
+  el.innerHTML = str;
+  return el.value;
+}
+
 /** How long ago — compact format */
 function waitTime(dateStr) {
   if (!dateStr) return '';
@@ -82,7 +90,7 @@ const EmailRow = memo(function EmailRow({ email, isSelected, onClick, index = 0,
       <div className="email-row-subject">{email.subject}</div>
 
       <div className="email-row-bottom">
-        <span className="email-row-snippet">{(email.snippet || '').slice(0, 65)}</span>
+        <span className="email-row-snippet">{decodeEntities(email.snippet || '').slice(0, 65)}</span>
         <span className="email-row-badge" style={{ background: cat.bg, color: cat.color }}>
           {cat.label}
         </span>
